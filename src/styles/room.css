@@ -606,18 +606,24 @@ a.pl-btn {
 }
 .q-list {
   display: grid;
-  gap: 4px;
   list-style: none;
   padding: 0;
   margin: 0;
 }
+/* строка — сетка с фиксированными колонками: номер · превью · текст; кнопки всплывают поверх справа */
 .q-item {
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px 88px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  padding: 6px;
+  height: 70px;
+  padding: 0 8px 0 4px;
   border: 1px dashed transparent;
-  transition: background-color 0.15s, transform 0.16s steps(2);
+  transition: background-color 0.15s steps(2), transform 0.16s steps(2);
+}
+.q-item + .q-item {
+  box-shadow: inset 0 1px var(--line);
 }
 .q-item:hover {
   background: var(--soft);
@@ -633,50 +639,131 @@ a.pl-btn {
   transform: translateY(2px);
 }
 .q-n {
-  flex: none;
-  width: 22px;
+  display: grid;
+  place-items: center;
   color: var(--faint);
   font: 600 12px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.q-item:first-child .q-n {
+  color: var(--a);
 }
 .q-thumb {
-  flex: none;
-  width: 96px;
-  height: 54px;
-  object-fit: cover;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 50px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
   background: var(--well);
+  color: var(--ink);
+  clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px));
+}
+.q-thumb img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.q-thumb svg {
+  grid-area: 1 / 1;
+  position: relative;
+  opacity: 0;
+  transition: opacity 0.15s steps(2);
+}
+button.q-thumb::after {
+  content: '';
+  grid-area: 1 / 1;
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 10, 12, 0.55);
+  opacity: 0;
+  transition: opacity 0.15s steps(2);
+}
+button.q-thumb:hover::after,
+button.q-thumb:focus-visible::after,
+button.q-thumb:hover svg,
+button.q-thumb:focus-visible svg {
+  opacity: 1;
 }
 .q-meta {
   display: grid;
-  gap: 3px;
+  align-content: center;
+  gap: 4px;
   min-width: 0;
-  flex: 1;
+}
+/* «далее» — плашка на превью первого в очереди: высоту строки не меняет */
+.q-next {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 1;
+  padding: 2px 5px;
+  background: var(--a);
+  color: var(--bg);
+  font: 700 10px/1.2 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 .q-title {
+  display: -webkit-box;
   overflow: hidden;
   color: var(--ink);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  text-decoration: none;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 .q-meta small {
   overflow: hidden;
   color: var(--dim);
   font-size: 12px;
+  line-height: 1.2;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .q-acts {
+  position: absolute;
+  top: 50%;
+  right: 6px;
   display: flex;
-  flex: none;
   gap: 2px;
-  opacity: 0.35;
+  padding: 2px;
+  background: var(--surf2);
+  box-shadow: 0 0 0 1px var(--line2), -16px 0 16px -4px var(--card);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
   transition: opacity 0.15s steps(2);
 }
 .q-item:hover .q-acts,
 .q-acts:focus-within {
   opacity: 1;
+  pointer-events: auto;
+}
+.q-acts button:disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+/* на сенсорных экранах наведения нет — кнопки стоят своей колонкой */
+@media (hover: none) {
+  .q-item:has(.q-acts) {
+    grid-template-columns: 20px 88px minmax(0, 1fr) auto;
+  }
+  .q-acts {
+    position: static;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
 }
 .q-acts button,
 .u-more {
@@ -999,8 +1086,7 @@ a.pl-btn {
     padding: 12px 16px 32px;
   }
   .pl-vol input,
-  .pl-time i,
-  .q-n {
+  .pl-time i {
     display: none;
   }
   .pl-bar {
@@ -1018,13 +1104,6 @@ a.pl-btn {
   }
   .now-title {
     font-size: 17px;
-  }
-  .q-thumb {
-    width: 72px;
-    height: 40px;
-  }
-  .q-acts {
-    opacity: 1;
   }
   .q-modes {
     width: 100%;
@@ -1330,4 +1409,28 @@ a.pl-btn {
 .swap > [hidden] {
   display: block;
   visibility: hidden;
+}
+
+/* узкие телефоны: две кнопки под участниками помещаются в строку, очередь — без номеров (шире название) */
+@media (max-width: 480px) {
+  .u-acts {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+  }
+  .u-acts .btn {
+    min-width: 0;
+    padding: 0 8px;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .q-item {
+    grid-template-columns: 88px minmax(0, 1fr);
+    padding-left: 0;
+  }
+  .q-item:has(.q-acts) {
+    grid-template-columns: 88px minmax(0, 1fr) auto;
+  }
+  .q-n {
+    display: none;
+  }
 }

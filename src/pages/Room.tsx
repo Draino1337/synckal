@@ -149,7 +149,7 @@ export function Room({ id }: { id: string }) {
       <div className="room-grid">
         <div className="room-main">
           <div className="room-play">
-            <QueueAdd hasVideo={!!room.player.videoId} canControl={canControl} send={send} />
+            <QueueAdd canControl={canControl} send={send} />
             <div className="room-stage">
               <Player player={room.player} serverNow={serverNow} canControl={canControl} send={send} skip={room.skip} notify={notify} info={info} />
               {status === 'reconnecting' && <span className="room-warn px px-raised">Связь потеряна, переподключаемся…</span>}

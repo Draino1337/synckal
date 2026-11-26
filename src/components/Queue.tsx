@@ -4,13 +4,12 @@ import { findYoutube, thumb } from '../lib/util.ts';
 import { Icon } from './Icon.tsx';
 
 interface AddProps {
-  hasVideo: boolean;
   canControl: boolean;
   send: (m: Record<string, unknown>) => void;
 }
 
 /** Поле для ссылки над плеером: в конец очереди, следующим или сразу. */
-export function QueueAdd({ hasVideo, canControl, send }: AddProps) {
+export function QueueAdd({ canControl, send }: AddProps) {
   const [url, setUrl] = useState('');
   const [bad, setBad] = useState(false); // ссылка не похожа на YouTube — поле не очищаем
 
@@ -35,14 +34,6 @@ export function QueueAdd({ hasVideo, canControl, send }: AddProps) {
         <input
           value={url}
           onChange={(e) => (setUrl(e.target.value), setBad(false))}
-          onPaste={(e) => {
-            // вставили ссылку в пустое поле — сразу добавляем
-            const text = e.clipboardData.getData('text').trim();
-            if (!url && findYoutube(text) && canControl) {
-              e.preventDefault();
-              send({ t: 'add', url: text, mode: hasVideo ? 'end' : 'now' });
-            }
-          }}
           placeholder={canControl ? 'Вставь ссылку на YouTube' : 'Добавлять видео может ведущий'}
           disabled={!canControl}
           aria-label="Ссылка на видео YouTube"
@@ -139,26 +130,33 @@ export function Queue({ queue, player, canControl, send }: Props) {
                 setOver(null);
               }}
             >
-              <span className="q-n">{String(i + 1).padStart(2, '0')}</span>
-              <img className="q-thumb" src={thumb(it.videoId)} alt="" loading="lazy" width={96} height={54} />
+              <span className="q-n">{i === 0 ? <Icon name="play" size={10} /> : String(i + 1).padStart(2, '0')}</span>
+              {canControl ? (
+                <button className="q-thumb" onClick={() => send({ t: 'playItem', id: it.id })} title="Включить сейчас" aria-label={'Включить сейчас: ' + it.title}>
+                  <img src={thumb(it.videoId)} alt="" loading="lazy" width={88} height={50} draggable={false} />
+                  <Icon name="play" size={16} />
+                  {i === 0 && <span className="q-next">далее</span>}
+                </button>
+              ) : (
+                <span className="q-thumb">
+                  <img src={thumb(it.videoId)} alt="" loading="lazy" width={88} height={50} draggable={false} />
+                  {i === 0 && <span className="q-next">далее</span>}
+                </span>
+              )}
               <div className="q-meta">
                 <span className="q-title" title={it.title}>
                   {it.title}
                 </span>
                 <small>
-                  {it.author && <>{it.author} · </>}добавил(а) {it.by}
+                  {it.author && <>{it.author} · </>}
+                  {it.by}
                 </small>
               </div>
               {canControl && (
                 <div className="q-acts">
-                  <button onClick={() => send({ t: 'playItem', id: it.id })} title="Включить сейчас" aria-label="Включить сейчас">
-                    <Icon name="play" />
+                  <button onClick={() => send({ t: 'move', id: it.id, to: 0 })} title="Поставить следующим" aria-label="Поставить следующим" disabled={i === 0}>
+                    <Icon name="up" />
                   </button>
-                  {i > 0 && (
-                    <button onClick={() => send({ t: 'move', id: it.id, to: 0 })} title="Поднять наверх" aria-label="Поднять наверх">
-                      <Icon name="up" />
-                    </button>
-                  )}
                   <button onClick={() => send({ t: 'remove', id: it.id })} title="Убрать" aria-label="Убрать из очереди">
                     <Icon name="x" />
                   </button>
