@@ -1,13 +1,15 @@
-/* ───────── главная: заголовок и два действия по центру экрана ───────── */
+/* ───────── главная: заголовок с действиями на первом экране, ниже — комнаты ───────── */
 .home {
+  padding-bottom: 72px;
+}
+.hero {
   display: grid;
   align-content: center;
   justify-items: start;
   gap: 36px;
-  min-height: calc(100vh - var(--hdr));
-  min-height: calc(100svh - var(--hdr));
-  padding-top: 32px;
-  padding-bottom: 12vh;
+  min-height: calc(82vh - var(--hdr));
+  min-height: calc(82svh - var(--hdr));
+  padding: 48px 0 32px;
 }
 .hero-h {
   font-size: clamp(40px, 7.4vw, 84px);
@@ -39,6 +41,151 @@
   max-width: 520px;
   color: var(--b-ink);
   font-size: 14px;
+}
+
+/* ───────── список комнат ───────── */
+.rooms {
+  display: grid;
+  gap: 18px;
+}
+.rooms-none {
+  color: var(--ink);
+  font-size: 15px;
+}
+.rooms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 14px;
+}
+.rc {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: transform 0.16s steps(2);
+}
+.rc:hover {
+  transform: translateY(-3px);
+}
+.rc-shot {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--well);
+}
+.rc-shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.rc-tv {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  color: var(--a-deep);
+  font: 700 13px/1.4 var(--mono);
+  text-align: center;
+}
+.rc-state,
+.rc-queue {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 7px;
+  background: rgba(10, 10, 12, 0.86);
+  color: var(--ink);
+  font: 700 10.5px/1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.rc-state {
+  left: 6px;
+  top: 6px;
+}
+.rc-state.is-live {
+  color: var(--a-ink);
+}
+.rc-state i {
+  width: 6px;
+  height: 6px;
+  background: var(--bad);
+  animation: blink 1.2s steps(1) infinite;
+}
+.rc-queue {
+  right: 6px;
+  bottom: 6px;
+  color: var(--muted);
+}
+.rc-body {
+  display: grid;
+  gap: 4px;
+  padding: 0 4px 4px;
+}
+.rc-video {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.3;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.rc-author {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rc-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  min-width: 0;
+}
+.rc-faces {
+  display: flex;
+  flex: none;
+}
+/* аватарки — квадратики с первой буквой ника, налезают друг на друга */
+.rc-faces i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: -4px;
+  box-shadow: 0 0 0 2px var(--card);
+  color: var(--bg);
+  font: 800 11px/1 var(--mono);
+  font-style: normal;
+}
+.rc-faces i:first-child {
+  margin-left: 0;
+}
+.rc-people {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rc-name {
+  overflow: hidden;
+  color: var(--dim);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rc-name em {
+  color: var(--faint);
+  font: 500 11.5px/1 var(--mono);
+  font-style: normal;
 }
 
 @media (max-width: 560px) {

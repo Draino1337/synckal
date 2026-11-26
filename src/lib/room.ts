@@ -31,7 +31,7 @@ export interface User {
 }
 export interface RoomState {
   id: string;
-  settings: { open: boolean; title: string };
+  settings: { open: boolean; listed: boolean; title: string };
   player: PlayerState;
   queue: QueueItem[];
   users: User[];

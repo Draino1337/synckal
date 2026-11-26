@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { PlayerState, QueueItem } from '../lib/room.ts';
-import { thumb } from '../lib/util.ts';
+import { findYoutube, thumb } from '../lib/util.ts';
 import { Icon } from './Icon.tsx';
 
 interface Props {
@@ -15,10 +15,19 @@ export function Queue({ queue, player, canControl, send }: Props) {
   const [url, setUrl] = useState('');
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<number | null>(null);
+  const [bad, setBad] = useState(false); // ссылка не похожа на YouTube — поле не очищаем
+  // «Очистить» спрашивает подтверждение вторым нажатием; через 3 с вопрос сам исчезает
+  const [sure, setSure] = useState(false);
+  useEffect(() => {
+    if (!sure) return;
+    const t = setTimeout(() => setSure(false), 3000);
+    return () => clearTimeout(t);
+  }, [sure]);
 
   const add = (mode: 'end' | 'next' | 'now') => {
     const v = url.trim();
     if (!v) return;
+    if (!/^[w-]{11}$/.test(v) && !findYoutube(v)) return setBad(true);
     send({ t: 'add', url: v, mode });
     setUrl('');
   };
@@ -36,7 +45,7 @@ export function Queue({ queue, player, canControl, send }: Props) {
           <Icon name="link" />
           <input
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => (setUrl(e.target.value), setBad(false))}
             onPaste={(e) => {
               // вставили ссылку в пустое поле — сразу добавляем в конец
               const text = e.clipboardData.getData('text').trim();
@@ -62,6 +71,7 @@ export function Queue({ queue, player, canControl, send }: Props) {
           </button>
         </div>
       </form>
+      {bad && <p className="q-bad">Это не похоже на ссылку YouTube — нужна ссылка вида youtube.com/watch?v=… или youtu.be/…</p>}
 
       <div className="q-head">
         <span className="label">Очередь · {queue.length}</span>
@@ -71,8 +81,16 @@ export function Queue({ queue, player, canControl, send }: Props) {
           </button>
         )}
         {canControl && queue.length > 0 && (
-          <button className="q-tool" onClick={() => confirm('Очистить очередь?') && send({ t: 'clear' })} title="Очистить">
-            <Icon name="x" /> Очистить
+          <button
+            className={sure ? 'q-tool is-sure' : 'q-tool'}
+            onClick={() => {
+              if (!sure) return setSure(true);
+              send({ t: 'clear' });
+              setSure(false);
+            }}
+            title="Очистить очередь"
+          >
+            <Icon name="x" /> {sure ? 'Точно очистить?' : 'Очистить'}
           </button>
         )}
       </div>

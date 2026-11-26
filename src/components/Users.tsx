@@ -13,6 +13,7 @@ interface Props {
 /** Участники и настройки комнаты (настройки видит только ведущий). */
 export function Users({ room, you, myRole, send, onRename }: Props) {
   const [menu, setMenu] = useState<string | null>(null);
+  const [sureCrown, setSureCrown] = useState(false); // передача короны — со вторым нажатием
   const [title, setTitle] = useState(room.settings.title);
   useEffect(() => setTitle(room.settings.title), [room.settings.title]);
   const leader = myRole === 'leader';
@@ -50,7 +51,7 @@ export function Users({ room, you, myRole, send, onRename }: Props) {
                 </button>
               )}
               {canAct && (
-                <button className="u-more" onClick={() => setMenu(menu === u.id ? null : u.id)} aria-label={`Действия: ${u.name}`} aria-expanded={menu === u.id}>
+                <button className="u-more" onClick={() => (setMenu(menu === u.id ? null : u.id), setSureCrown(false))} aria-label={`Действия: ${u.name}`} aria-expanded={menu === u.id}>
                   ⋯
                 </button>
               )}
@@ -62,8 +63,15 @@ export function Users({ room, you, myRole, send, onRename }: Props) {
                     </button>
                   )}
                   {leader && (
-                    <button onClick={() => confirm(`Передать корону: ${u.name}?`) && (send({ t: 'promote', uid: u.id, role: 'leader' }), setMenu(null))}>
-                      <Icon name="crown" size={14} /> Передать корону
+                    <button
+                      className={sureCrown ? 'is-sure' : undefined}
+                      onClick={() => {
+                        if (!sureCrown) return setSureCrown(true);
+                        send({ t: 'promote', uid: u.id, role: 'leader' });
+                        setMenu(null);
+                      }}
+                    >
+                      <Icon name="crown" size={14} /> {sureCrown ? 'Точно передать? Нажми ещё раз' : 'Передать корону'}
                     </button>
                   )}
                   <button className="is-bad" onClick={() => (send({ t: 'kick', uid: u.id }), setMenu(null))}>
@@ -83,6 +91,11 @@ export function Users({ room, you, myRole, send, onRename }: Props) {
             <input type="checkbox" checked={room.settings.open} onChange={(e) => send({ t: 'settings', open: e.target.checked })} />
             <i />
             Управлять плеером и очередью могут все
+          </label>
+          <label className="tgl">
+            <input type="checkbox" checked={room.settings.listed} onChange={(e) => send({ t: 'settings', listed: e.target.checked })} />
+            <i />
+            Показывать комнату на главной
           </label>
           <form
             className="set-title"

@@ -73,13 +73,27 @@ export function Room({ id }: { id: string }) {
   };
 
   const copy = async () => {
+    const link = location.origin + '/r/' + id;
+    let ok = false;
     try {
-      await navigator.clipboard.writeText(location.origin + '/r/' + id);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      await navigator.clipboard.writeText(link);
+      ok = true;
     } catch {
-      prompt('Скопируй ссылку:', location.origin + '/r/' + id);
+      // Clipboard API недоступен (нет https, фокуса или разрешения) — старый способ через скрытое поле
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+      document.body.append(ta);
+      ta.select();
+      try {
+        ok = document.execCommand('copy');
+      } catch {}
+      ta.remove();
     }
+    if (!ok) return void prompt('Скопируй ссылку:', link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
   };
 
   if (!name) return <NameModal initial={randomName()} onDone={saveName} />;

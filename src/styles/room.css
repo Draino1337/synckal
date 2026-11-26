@@ -713,3 +713,15 @@ a.pl-btn {
     display: none;
   }
 }
+
+/* второе нажатие для подтверждения — янтарным */
+.q-tool.is-sure,
+.u-menu button.is-sure {
+  color: var(--b);
+}
+
+.q-bad {
+  margin: -4px 0 0;
+  color: var(--b-ink);
+  font-size: 13px;
+}

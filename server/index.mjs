@@ -91,7 +91,7 @@ class Room {
     this.mods = new Set(); // cid модераторов
     this.banned = new Set(); // cid выгнанных: обратно не пускаем
     this.joinOrder = new Map(); // cid → когда впервые зашёл (для передачи короны)
-    this.settings = { open: true, title: '' };
+    this.settings = { open: true, listed: true, title: '' }; // listed — видна в списке на главной
     this.player = { videoId: null, title: '', author: '', playing: false, pos: 0, at: now(), rate: 1, rev: 0, item: null };
     this.queue = [];
     this.chat = [];
@@ -321,6 +321,7 @@ const handlers = {
   settings(room, m, d) {
     if (room.role(m.cid) !== 'leader') return deny(m);
     if (typeof d.open === 'boolean') room.settings.open = d.open;
+    if (typeof d.listed === 'boolean') room.settings.listed = d.listed;
     if (typeof d.title === 'string') room.settings.title = clip(d.title, 48);
     room.sync();
   },
@@ -387,8 +388,25 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/api/new' && req.method === 'POST') return json(res, 200, { room: roomCode() });
   if (url.pathname === '/api/rooms') {
-    // проверка здоровья (Render) и счётчик онлайна
-    return json(res, 200, { rooms: rooms.size, online: [...rooms.values()].reduce((n, r) => n + r.members.size, 0) });
+    // список комнат для главной (и проверка здоровья на Render): кто внутри, что играет
+    const list = [...rooms.values()]
+      .filter((r) => r.settings.listed && r.members.size > 0)
+      .map((r) => {
+        const users = r.snapshot().users.map((u) => ({ name: u.name, color: u.color, role: u.role }));
+        return {
+          id: r.id,
+          title: r.settings.title,
+          users,
+          videoId: r.player.videoId,
+          video: r.player.title,
+          author: r.player.author,
+          playing: r.player.playing,
+          queue: r.queue.length,
+        };
+      })
+      .sort((a, b) => b.users.length - a.users.length || Number(!!b.videoId) - Number(!!a.videoId))
+      .slice(0, 48);
+    return json(res, 200, { rooms: list, online: list.reduce((n, r) => n + r.users.length, 0) });
   }
   if (url.pathname.startsWith('/api/')) return json(res, 404, { error: 'not found' });
 
