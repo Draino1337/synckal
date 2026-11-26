@@ -1,0 +1,15 @@
+# Render Blueprint: один веб-сервис — Node.js раздаёт собранный фронтенд и держит WebSocket /ws.
+# Бесплатный план засыпает после ~15 минут без посетителей; первый заход после сна грузится ~30-50 с.
+services:
+  - type: web
+    name: synckal
+    runtime: node
+    plan: free
+    # devDependencies (vite, typescript) нужны для сборки
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/rooms
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22
