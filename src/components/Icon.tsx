@@ -21,6 +21,7 @@ const P: Record<string, ReactNode> = {
   up: <path d="M7 2h2v1h1v1h1v1h1v1h1v2H9v6H7V8H3V6h1V5h1V4h1V3h1z" />,
   shuffle: <path d="M1 3h4v1h1v1h1v2H6V6H5V5H1zM10 2h2v1h1v1h1v1h1v1h-1v1h-1v1h-1v1h-1V7H9v1H8v2h1v1h1V9h1v1h1v1h1v1h-1v1h-1v1h-1v1h-1v-2H9v-1H8v-1H7V9H6v1H5v1H1V9h4V8h1V6h1V5h1V4h2z" />,
   gear: <path d="M7 1h2v2h2V2h1v1h1v1h-1v2h2v2h-2v2h1v1h-1v1h-1v-1H9v2H7v-2H5v1H4v-1H3v-1h1V9H2V7h2V5H3V4h1V3h1v1h2zM7 6v1H6v2h1v1h2V9h1V7H9V6z" />,
+  like: <path d="M1 7h3v8H1zM5 7h1V5h1V3h1V2h2v1h1v3h-1v1h4v1h1v2h-1v1h1v2h-1v1h-1v1H5z" />,
   copy: <path d="M5 1h9v10h-2V3H5zM2 4h8v11H2z" />,
   check: <path d="M13 3h2v2h-1v1h-1v1h-1v1h-1v1h-1v1H9v1H8v1H7v1H5v-1H4v-1H3v-1H2V9H1V7h2v1h1v1h1v1h1V9h1V8h1V7h1V6h1V5h1V4h1V3h1z" />,
   arrow: <path d="M8 2h2v1h1v1h1v1h1v1h1v1h1v2h-1v1h-1v1h-1v1h-1v1h-1v1H8v-2h1v-1h1v-1H1V7h9V6H9V5H8z" />,

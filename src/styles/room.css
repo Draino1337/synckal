@@ -61,12 +61,85 @@
   line-height: 1.25;
   text-decoration: none;
 }
-.now-title:hover {
-  color: var(--a-ink);
+.now-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
 }
 .now small {
   color: var(--sky);
   font-size: 13px;
+}
+
+/* лайки/дизлайки: лавандовые плашки и ступенчатая шкала */
+.votes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  animation: votes-in 0.3s steps(3);
+}
+@keyframes votes-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.votes.is-loading {
+  width: 220px;
+  height: 26px;
+  background: repeating-linear-gradient(90deg, var(--soft) 0 6px, transparent 6px 10px);
+  opacity: 0.6;
+  animation: blink 1.2s steps(1) infinite;
+}
+.vote {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 9px;
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--line2);
+  color: var(--ink);
+  font: 700 12.5px/1 var(--mono);
+  clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px));
+}
+.vote.is-like {
+  background: rgba(184, 167, 240, 0.14);
+  box-shadow: inset 0 0 0 1px var(--a-deep);
+  color: var(--a-ink);
+}
+.vote.is-like svg {
+  color: var(--a);
+}
+.vote.is-dislike svg {
+  color: var(--muted);
+  transform: rotate(180deg);
+}
+.vote-bar {
+  position: relative;
+  width: 96px;
+  height: 8px;
+  background: repeating-linear-gradient(90deg, var(--line2) 0 4px, transparent 4px 6px);
+}
+.vote-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--r);
+  background: repeating-linear-gradient(90deg, var(--a) 0 4px, transparent 4px 6px);
+  box-shadow: 0 0 10px rgba(184, 167, 240, 0.35);
+  animation: bar-fill 0.7s steps(8);
+}
+@keyframes bar-fill {
+  from {
+    width: 0;
+  }
+}
+.vote-views {
+  color: var(--muted);
+  font: 500 12px/1 var(--mono);
 }
 
 /* ───────── плеер ───────── */
@@ -473,9 +546,6 @@ a.pl-btn {
   text-decoration: none;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-.q-title:hover {
-  color: var(--a-ink);
 }
 .q-meta small {
   overflow: hidden;
@@ -941,5 +1011,95 @@ a.pl-btn {
   }
   .pl-qmenu {
     right: -60px;
+  }
+}
+
+/* ───────── превью на дорожке ───────── */
+.pl-seek {
+  position: relative;
+}
+/* границы глав — тёмные зазоры на дорожке */
+.pl-chap {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 3px;
+  height: 6px;
+  margin: -3px 0 0 -1px;
+  background: var(--card);
+  pointer-events: none;
+}
+.pl-pv {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  z-index: 6;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  pointer-events: none;
+  animation: pv-in 0.18s steps(3);
+}
+@keyframes pv-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.pl-pv-shot {
+  background-color: #000;
+  background-repeat: no-repeat;
+  box-shadow:
+    0 0 0 2px var(--a),
+    0 0 0 4px #000,
+    0 10px 30px rgba(0, 0, 0, 0.6);
+  image-rendering: auto;
+}
+.pl-pv-cap {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 5px 9px;
+  background: rgba(10, 10, 12, 0.9);
+  box-shadow: inset 0 0 0 1px var(--line3);
+  text-align: center;
+}
+.pl-pv-cap b {
+  color: var(--ink);
+  font: 700 13px/1 var(--mono);
+}
+.pl-pv-cap span {
+  overflow: hidden;
+  max-width: 180px;
+  color: var(--a-ink);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ───────── распустить комнату ───────── */
+.btn-danger {
+  justify-self: start;
+  margin-top: 6px;
+  --rim: rgba(242, 77, 92, 0.55);
+  color: var(--bad);
+}
+.btn-danger:hover {
+  --rim: var(--bad);
+  background: rgba(242, 77, 92, 0.12);
+}
+.btn-danger.is-sure {
+  --rim: var(--bad);
+  background: var(--bad);
+  color: #fff;
+  animation: shake 0.3s steps(3);
+}
+@keyframes shake {
+  33% {
+    transform: translateX(-3px);
+  }
+  66% {
+    transform: translateX(3px);
   }
 }

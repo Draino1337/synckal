@@ -129,9 +129,9 @@ export function Queue({ queue, player, canControl, send }: Props) {
               <span className="q-n">{String(i + 1).padStart(2, '0')}</span>
               <img className="q-thumb" src={thumb(it.videoId)} alt="" loading="lazy" width={96} height={54} />
               <div className="q-meta">
-                <a href={`https://www.youtube.com/watch?v=${it.videoId}`} target="_blank" rel="noreferrer" className="q-title" title={it.title}>
+                <span className="q-title" title={it.title}>
                   {it.title}
-                </a>
+                </span>
                 <small>
                   {it.author && <>{it.author} · </>}добавил(а) {it.by}
                 </small>

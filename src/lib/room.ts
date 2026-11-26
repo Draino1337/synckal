@@ -28,6 +28,7 @@ export interface User {
   name: string;
   color: string;
   role: Role;
+  creator?: boolean; // создал комнату — может её распустить
 }
 export interface RoomState {
   id: string;
@@ -47,7 +48,7 @@ export interface ChatMsg {
   color?: string;
 }
 
-export type Status = 'connecting' | 'open' | 'reconnecting' | 'kicked';
+export type Status = 'connecting' | 'open' | 'reconnecting' | 'kicked' | 'disbanded';
 
 /** Позиция плеера сейчас — по серверным часам. */
 export function expectedPos(p: PlayerState, serverNow: number) {
@@ -131,6 +132,10 @@ export function useRoom(roomId: string, name: string | null) {
           case 'kicked':
             closed = true;
             setStatus('kicked');
+            break;
+          case 'disbanded':
+            closed = true;
+            setStatus('disbanded');
             break;
         }
       };

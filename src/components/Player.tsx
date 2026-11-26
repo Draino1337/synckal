@@ -3,6 +3,7 @@ import { expectedPos, type PlayerState } from '../lib/room.ts';
 import { loadYT, S, YT_ERRORS } from '../lib/youtube.ts';
 import { fmtTime, store } from '../lib/util.ts';
 import { Icon } from './Icon.tsx';
+import { storyFrame, type VideoInfo } from '../lib/videoInfo.ts';
 import { QualityMenu, frameGeometry, qLabel, type Quality } from './Quality.tsx';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
   send: (m: Record<string, unknown>) => void;
   skip: { votes: number; need: number };
   notify: (text: string) => void;
+  info: VideoInfo | null;
 }
 
 const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -23,7 +25,7 @@ const DRIFT_PAUSED = 0.4;
  * и не путалось с подстройкой. Раз в 250 мс сверяем плеер с состоянием комнаты:
  * то ли видео, играет/пауза, скорость, позиция (с поправкой на серверные часы).
  */
-export function Player({ player, serverNow, canControl, send, skip, notify }: Props) {
+export function Player({ player, serverNow, canControl, send, skip, notify, info }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLDivElement>(null);
@@ -48,6 +50,8 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
   const [buf, setBuf] = useState(0);
   const [waiting, setWaiting] = useState(false);
   const [scrub, setScrub] = useState<number | null>(null);
+  const seekEl = useRef<HTMLDivElement>(null);
+  const [hoverX, setHoverX] = useState<number | null>(null); // где мышь над дорожкой (px от левого края)
   const [vol, setVol] = useState(() => Number(store.get('vol') ?? 80));
   const [muted, setMuted] = useState(() => store.get('muted') === '1');
   const [full, setFull] = useState(false);
@@ -417,7 +421,17 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
       </div>
 
       <div className="pl-bar">
-        <div className="pl-seek" style={{ '--p': `${pct}%`, '--buf': `${buf * 100}%` } as React.CSSProperties}>
+        <div
+          className="pl-seek"
+          ref={seekEl}
+          style={{ '--p': `${pct}%`, '--buf': `${buf * 100}%` } as React.CSSProperties}
+          onPointerMove={(e) => setHoverX(e.clientX - e.currentTarget.getBoundingClientRect().left)}
+          onPointerLeave={() => setHoverX(null)}
+        >
+          {has && dur > 0 && info?.chapters.map((c) => c.t > 0 && c.t < dur && <i key={c.t} className="pl-chap" style={{ left: `${(c.t / dur) * 100}%` }} />)}
+          {has && dur > 0 && (hoverX !== null || scrub !== null) && (
+            <SeekPreview width={seekEl.current?.clientWidth ?? 0} x={hoverX} t={scrub} dur={dur} info={info} />
+          )}
           <input
             type="range"
             min={0}
@@ -505,6 +519,40 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
             <Icon name="full" size={18} />
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Карточка над дорожкой: кадр из раскадровки YouTube, время и глава. */
+function SeekPreview({ width, x, t, dur, info }: { width: number; x: number | null; t: number | null; dur: number; info: VideoInfo | null }) {
+  if (!width) return null;
+  // при перетаскивании показываем точку, куда тянут, иначе — под мышью
+  const at = t ?? Math.max(0, Math.min(1, (x ?? 0) / width)) * dur;
+  const sb = info?.storyboard;
+  const W = sb ? 192 : 0;
+  const card = Math.max(W, 96);
+  const left = Math.max(0, Math.min(width - card, (at / dur) * width - card / 2));
+  const chapter = info?.chapters.filter((c) => c.t <= at).pop()?.title;
+  const f = sb && storyFrame(sb, at, dur);
+  const k = sb ? W / sb.w : 1;
+  return (
+    <div className="pl-pv" style={{ left, width: card }} aria-hidden="true">
+      {sb && f && (
+        <div
+          className="pl-pv-shot"
+          style={{
+            width: W,
+            height: Math.round(sb.h * k),
+            backgroundImage: `url("${f.url}")`,
+            backgroundSize: `${sb.cols * sb.w * k}px auto`,
+            backgroundPosition: `-${f.x * k}px -${f.y * k}px`,
+          }}
+        />
+      )}
+      <div className="pl-pv-cap">
+        <b>{fmtTime(at)}</b>
+        {chapter && <span>{chapter}</span>}
       </div>
     </div>
   );

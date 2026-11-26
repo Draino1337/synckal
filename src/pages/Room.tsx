@@ -8,6 +8,8 @@ import { Queue } from '../components/Queue.tsx';
 import { Chat } from '../components/Chat.tsx';
 import { Users } from '../components/Users.tsx';
 import { Icon } from '../components/Icon.tsx';
+import { useVideoInfo } from '../lib/videoInfo.ts';
+import { Votes } from '../components/Votes.tsx';
 
 function NameModal({ initial, onDone, onCancel }: { initial: string; onDone: (n: string) => void; onCancel?: () => void }) {
   const [name, setName] = useState(initial);
@@ -49,6 +51,7 @@ export function Room({ id }: { id: string }) {
   const [renaming, setRenaming] = useState(false);
   const [copied, setCopied] = useState(false);
   const { status, room, chat, you, send, serverNow, toast, notify } = useRoom(id, name);
+  const info = useVideoInfo(room?.player.videoId ?? null);
   const [toastOn, setToastOn] = useState(false);
 
   useEffect(() => {
@@ -98,6 +101,17 @@ export function Room({ id }: { id: string }) {
 
   if (!name) return <NameModal initial={randomName()} onDone={saveName} />;
 
+  if (status === 'disbanded')
+    return (
+      <div className="wrap lost">
+        <h1>Комнату распустили</h1>
+        <p>Создатель закрыл эту комнату. Можно создать свою — это один клик.</p>
+        <a className="btn btn-primary" href="/" onClick={link}>
+          На главную
+        </a>
+      </div>
+    );
+
   if (status === 'kicked')
     return (
       <div className="wrap lost">
@@ -137,15 +151,16 @@ export function Room({ id }: { id: string }) {
 
       <div className="room-grid">
         <div className="room-main">
-          <Player player={room.player} serverNow={serverNow} canControl={canControl} send={send} skip={room.skip} notify={notify} />
+          <Player player={room.player} serverNow={serverNow} canControl={canControl} send={send} skip={room.skip} notify={notify} info={info} />
           <div className="now">
             {room.player.videoId ? (
               <>
                 <span className="label">Сейчас играет</span>
-                <a className="now-title" href={`https://www.youtube.com/watch?v=${room.player.videoId}`} target="_blank" rel="noreferrer">
-                  {room.player.title}
-                </a>
-                {room.player.author && <small>{room.player.author}</small>}
+                <h2 className="now-title">{room.player.title}</h2>
+                <div className="now-meta">
+                  {room.player.author && <small>{room.player.author}</small>}
+                  <Votes info={info} />
+                </div>
               </>
             ) : (
               <span className="label">Ничего не играет</span>

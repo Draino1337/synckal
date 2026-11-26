@@ -17,6 +17,9 @@ const COLORS = ['#b8a7f0', '#e0b64a', '#6fd8f2', '#3fb950', '#f27aa6', '#f2994a'
 
 /** @type {Map<string, Room>} */
 const rooms = new Map();
+/** @type {Map<string, number>} распущенные комнаты → когда; код какое-то время не занимаем заново */
+const disbanded = new Map();
+const DISBAND_TTL = 6 * 60 * 60_000;
 
 const now = () => Date.now();
 const uid = (n = 8) => crypto.randomBytes(n).toString('base64url').slice(0, n);
@@ -25,7 +28,7 @@ const roomCode = () => {
   const abc = 'abcdefghijkmnpqrstuvwxyz23456789';
   let s = '';
   for (let i = 0; i < 6; i++) s += abc[crypto.randomInt(abc.length)];
-  return rooms.has(s) ? roomCode() : s;
+  return rooms.has(s) || disbanded.has(s) ? roomCode() : s;
 };
 const validRoom = (s) => typeof s === 'string' && /^[a-z0-9-]{3,32}$/.test(s);
 
@@ -81,12 +84,86 @@ async function videoMeta(id) {
   }
 }
 
+const infoCache = new Map(); // id → { at, data }
+const INFO_TTL = 30 * 60_000;
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
+
+/**
+ * Раскадровка из страницы видео. spec: «шаблон|уровень|уровень…», уровень — «w#h#кадров#столбцов#строк#интервал_мс#имя#sigh».
+ * Берём самый крупный уровень (обычно 320×180, листы 3×3, кадр каждые 2 с).
+ */
+export function parseStoryboard(spec) {
+  if (!spec) return null;
+  const [base, ...levels] = spec.split('|');
+  for (let L = levels.length - 1; L >= 0; L--) {
+    const [w, h, count, cols, rows, interval, name, sigh] = levels[L].split('#');
+    if (!name || !sigh || !+w || !+count) continue;
+    return {
+      url: base.replace('$L', String(L)).replace('$N', name) + '&sigh=' + sigh, // $M в url — номер листа
+      w: +w,
+      h: +h,
+      count: +count,
+      cols: +cols,
+      rows: +rows,
+      interval: +interval,
+    };
+  }
+  return null;
+}
+
+async function watchPage(id) {
+  const r = await fetch('https://www.youtube.com/watch?v=' + id + '&hl=ru', {
+    headers: { 'user-agent': UA, 'accept-language': 'ru,en;q=0.8', cookie: 'CONSENT=YES+1; SOCS=CAI' },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!r.ok) throw new Error('watch ' + r.status);
+  const html = await r.text();
+  const spec = html.match(/"playerStoryboardSpecRenderer":\{"spec":"([^"]+)"/)?.[1]?.replace(/\\u0026/g, '&');
+  const chapters = [];
+  const seen = new Set();
+  for (const m of html.matchAll(/"chapterRenderer":\{"title":\{"simpleText":"((?:[^"\\]|\\.)*)"\},"timeRangeStartMillis":(\d+)/g)) {
+    const t = Number(m[2]) / 1000;
+    if (seen.has(t)) continue; // главы на странице повторяются в нескольких блоках
+    seen.add(t);
+    let title = m[1];
+    try {
+      title = JSON.parse('"' + m[1] + '"');
+    } catch {}
+    chapters.push({ t, title: clip(title, 100) });
+  }
+  chapters.sort((a, b) => a.t - b.t);
+  return { storyboard: parseStoryboard(spec), chapters };
+}
+
+async function votes(id) {
+  // публичных дизлайков у YouTube нет — оценка от Return YouTube Dislike (лайки там настоящие)
+  const r = await fetch('https://returnyoutubedislikeapi.com/votes?videoId=' + id, { signal: AbortSignal.timeout(6000) });
+  if (!r.ok) throw new Error('votes ' + r.status);
+  const j = await r.json();
+  return { likes: num(j.likes, null), dislikes: num(j.dislikes, null), views: num(j.viewCount, null) };
+}
+
+async function videoInfo(id) {
+  const c = infoCache.get(id);
+  if (c && now() - c.at < INFO_TTL) return c.data;
+  const [page, v] = await Promise.allSettled([watchPage(id), votes(id)]);
+  const data = {
+    storyboard: page.status === 'fulfilled' ? page.value.storyboard : null,
+    chapters: page.status === 'fulfilled' ? page.value.chapters : [],
+    ...(v.status === 'fulfilled' ? v.value : { likes: null, dislikes: null, views: null }),
+  };
+  infoCache.set(id, { at: now(), data });
+  if (infoCache.size > 2000) infoCache.delete(infoCache.keys().next().value);
+  return data;
+}
+
 class Room {
   constructor(id) {
     this.id = id;
     this.created = now();
     /** @type {Map<string, Member>} uid → участник (по одному на вкладку) */
     this.members = new Map();
+    this.creatorCid = null; // кто создал комнату — только он может её распустить
     this.leaderCid = null; // ведущий — по постоянному id клиента, переживает перезагрузку страницы
     this.mods = new Set(); // cid модераторов
     this.banned = new Set(); // cid выгнанных: обратно не пускаем
@@ -158,6 +235,7 @@ class Room {
           name: m.name,
           color: m.color,
           role: m.cid === leader ? 'leader' : this.mods.has(m.cid) ? 'mod' : 'user',
+          ...(m.cid === this.creatorCid ? { creator: true } : {}),
         });
     }
     const users = [...byCid.values()];
@@ -344,6 +422,16 @@ const handlers = {
     }
     room.sync();
   },
+  disband(room, m) {
+    if (m.cid !== room.creatorCid) return room.send(m.ws, { t: 'error', text: 'Распустить комнату может только её создатель' });
+    rooms.delete(room.id);
+    disbanded.set(room.id, now());
+    for (const x of room.members.values()) {
+      room.send(x.ws, { t: 'disbanded' });
+      x.ws.close(4002, 'disbanded');
+    }
+    room.members.clear();
+  },
   kick(room, m, d) {
     if (!room.isStaff(m.cid)) return deny(m);
     const target = room.members.get(d.uid);
@@ -408,6 +496,14 @@ const server = http.createServer((req, res) => {
       .slice(0, 48);
     return json(res, 200, { rooms: list, online: list.reduce((n, r) => n + r.users.length, 0) });
   }
+  const vi = url.pathname.match(/^\/api\/video\/([\w-]{11})$/);
+  if (vi) {
+    videoInfo(vi[1]).then(
+      (data) => json(res, 200, data),
+      () => json(res, 502, { error: 'youtube unavailable' }),
+    );
+    return;
+  }
   if (url.pathname.startsWith('/api/')) return json(res, 404, { error: 'not found' });
 
   // статика из dist/, всё остальное — index.html (маршруты SPA)
@@ -457,6 +553,10 @@ wss.on('connection', (ws) => {
 
     if (d.t === 'join') {
       if (me || !validRoom(d.room)) return;
+      if (disbanded.has(d.room)) {
+        ws.send(JSON.stringify({ t: 'disbanded' }));
+        return ws.close(4002, 'disbanded');
+      }
       const room = getRoom(d.room);
       const cid = clip(d.cid, 40) || uid(12);
       if (room.banned.has(cid)) {
@@ -465,7 +565,7 @@ wss.on('connection', (ws) => {
       }
       const fresh = !room.joinOrder.has(cid);
       if (fresh) room.joinOrder.set(cid, now());
-      if (!room.leaderCid) room.leaderCid = cid; // создатель комнаты — ведущий
+      if (!room.leaderCid) room.leaderCid = room.creatorCid = cid; // создатель комнаты — ведущий
       const sameCid = [...room.members.values()].find((x) => x.cid === cid);
       me = { id: uid(10), cid, name: clip(d.name, 24) || 'Гость', color: sameCid?.color ?? COLORS[room.colorIdx++ % COLORS.length], ws, room };
       room.members.set(me.id, me);
@@ -489,7 +589,7 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     if (!me) return;
     const room = me.room;
-    room.members.delete(me.id);
+    if (!room.members.delete(me.id)) return; // комнату распустили — участников уже нет
     const stillHere = [...room.members.values()].some((x) => x.cid === me.cid);
     if (!stillHere) {
       room.skipVotes.delete(me.cid);
@@ -514,6 +614,7 @@ setInterval(() => {
     ws.isAlive = false;
     ws.ping();
   }
+  for (const [id, t] of disbanded) if (now() - t > DISBAND_TTL) disbanded.delete(id);
   for (const [id, r] of rooms) if (r.members.size === 0 && r.emptySince && now() - r.emptySince > ROOM_TTL) rooms.delete(id);
 }, 30_000);
 

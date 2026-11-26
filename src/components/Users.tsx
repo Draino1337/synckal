@@ -13,7 +13,14 @@ interface Props {
 /** Участники и настройки комнаты (настройки видит только ведущий). */
 export function Users({ room, you, myRole, send, onRename }: Props) {
   const [menu, setMenu] = useState<string | null>(null);
-  const [sureCrown, setSureCrown] = useState(false); // передача короны — со вторым нажатием
+  const [sureCrown, setSureCrown] = useState(false);
+  const [sureDisband, setSureDisband] = useState(false); // «Распустить» — тоже вторым нажатием
+  useEffect(() => {
+    if (!sureDisband) return;
+    const t = setTimeout(() => setSureDisband(false), 4000);
+    return () => clearTimeout(t);
+  }, [sureDisband]);
+  const creator = room.users.some((u) => u.creator && !!you && u.ids.includes(you)); // передача короны — со вторым нажатием
   const [title, setTitle] = useState(room.settings.title);
   useEffect(() => setTitle(room.settings.title), [room.settings.title]);
   const leader = myRole === 'leader';
@@ -116,6 +123,18 @@ export function Users({ room, you, myRole, send, onRename }: Props) {
         <p className="set-note">
           {room.settings.open ? 'Управлять плеером и очередью могут все.' : 'Плеером и очередью управляют ведущий и модераторы. Остальные могут голосовать за пропуск.'}
         </p>
+      )}
+
+      {creator && (
+        <button
+          className={sureDisband ? 'btn btn-ghost btn-sm btn-danger is-sure' : 'btn btn-ghost btn-sm btn-danger'}
+          onClick={() => {
+            if (!sureDisband) return setSureDisband(true);
+            send({ t: 'disband' });
+          }}
+        >
+          <Icon name="x" /> {sureDisband ? 'Точно? Все выйдут из комнаты' : 'Распустить комнату'}
+        </button>
       )}
     </section>
   );
