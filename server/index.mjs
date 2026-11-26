@@ -91,7 +91,7 @@ class Room {
     this.mods = new Set(); // cid модераторов
     this.banned = new Set(); // cid выгнанных: обратно не пускаем
     this.joinOrder = new Map(); // cid → когда впервые зашёл (для передачи короны)
-    this.settings = { open: true, listed: false, title: '' };
+    this.settings = { open: true, title: '' };
     this.player = { videoId: null, title: '', author: '', playing: false, pos: 0, at: now(), rate: 1, rev: 0, item: null };
     this.queue = [];
     this.chat = [];
@@ -321,7 +321,6 @@ const handlers = {
   settings(room, m, d) {
     if (room.role(m.cid) !== 'leader') return deny(m);
     if (typeof d.open === 'boolean') room.settings.open = d.open;
-    if (typeof d.listed === 'boolean') room.settings.listed = d.listed;
     if (typeof d.title === 'string') room.settings.title = clip(d.title, 48);
     room.sync();
   },
@@ -388,18 +387,8 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/api/new' && req.method === 'POST') return json(res, 200, { room: roomCode() });
   if (url.pathname === '/api/rooms') {
-    const list = [...rooms.values()]
-      .filter((r) => r.settings.listed && r.members.size > 0)
-      .map((r) => ({
-        id: r.id,
-        title: r.settings.title,
-        users: new Set([...r.members.values()].map((m) => m.cid)).size,
-        videoId: r.player.videoId,
-        video: r.player.title,
-      }))
-      .sort((a, b) => b.users - a.users)
-      .slice(0, 30);
-    return json(res, 200, { rooms: list, online: [...rooms.values()].reduce((n, r) => n + r.members.size, 0) });
+    // проверка здоровья (Render) и счётчик онлайна
+    return json(res, 200, { rooms: rooms.size, online: [...rooms.values()].reduce((n, r) => n + r.members.size, 0) });
   }
   if (url.pathname.startsWith('/api/')) return json(res, 404, { error: 'not found' });
 
@@ -469,7 +458,7 @@ wss.on('connection', (ws) => {
       return;
     }
     if (!me) return;
-    const h = handlers[d.t];
+    const h = Object.hasOwn(handlers, d.t) ? handlers[d.t] : null;
     if (h) {
       try {
         await h(me.room, me, d);

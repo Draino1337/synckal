@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { RoomState, Role } from '../lib/room.ts';
 import { Icon } from './Icon.tsx';
 
@@ -14,6 +14,7 @@ interface Props {
 export function Users({ room, you, myRole, send, onRename }: Props) {
   const [menu, setMenu] = useState<string | null>(null);
   const [title, setTitle] = useState(room.settings.title);
+  useEffect(() => setTitle(room.settings.title), [room.settings.title]);
   const leader = myRole === 'leader';
   const staff = myRole !== 'user';
 
@@ -82,11 +83,6 @@ export function Users({ room, you, myRole, send, onRename }: Props) {
             <input type="checkbox" checked={room.settings.open} onChange={(e) => send({ t: 'settings', open: e.target.checked })} />
             <i />
             Управлять плеером и очередью могут все
-          </label>
-          <label className="tgl">
-            <input type="checkbox" checked={room.settings.listed} onChange={(e) => send({ t: 'settings', listed: e.target.checked })} />
-            <i />
-            Показывать комнату на главной
           </label>
           <form
             className="set-title"

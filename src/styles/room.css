@@ -214,6 +214,18 @@
   color: var(--faint);
   cursor: default;
 }
+a.pl-btn {
+  text-decoration: none;
+}
+/* субтитры: надпись CC в рамке, включены — лавандовые */
+.pl-cc {
+  font: 800 11px/1 var(--mono);
+  letter-spacing: 0.05em;
+}
+.pl-cc.is-on {
+  color: var(--a);
+  box-shadow: inset 0 -2px var(--a);
+}
 .pl-btn small {
   font: 700 11px/1 var(--mono);
   color: var(--b);
@@ -693,5 +705,11 @@
   .q-modes .btn {
     flex: 1;
     padding: 0 10px;
+  }
+}
+/* совсем узкие телефоны: «догнать» прячем — подмотка и так автоматическая */
+@media (max-width: 480px) {
+  .pl-sync {
+    display: none;
   }
 }

@@ -23,6 +23,8 @@ declare global {
       mute(): void;
       unMute(): void;
       getVideoLoadedFraction(): number;
+      loadModule(name: string): void;
+      unloadModule(name: string): void;
       destroy(): void;
     }
     interface PlayerEvent {

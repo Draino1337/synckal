@@ -1,12 +1,13 @@
-/* ───────── главная ───────── */
+/* ───────── главная: заголовок и два действия по центру экрана ───────── */
 .home {
-  padding-top: 9vh;
-}
-.hero {
   display: grid;
+  align-content: center;
   justify-items: start;
-  gap: 22px;
-  max-width: 760px;
+  gap: 36px;
+  min-height: calc(100vh - var(--hdr));
+  min-height: calc(100svh - var(--hdr));
+  padding-top: 32px;
+  padding-bottom: 12vh;
 }
 .hero-h {
   font-size: clamp(40px, 7.4vw, 84px);
@@ -21,18 +22,11 @@
 .hero-h .caret {
   color: var(--a);
 }
-.lead {
-  max-width: 560px;
-  color: var(--ink);
-  font-size: 18px;
-  line-height: 1.55;
-}
 .hero-cta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 14px 18px;
-  margin-top: 8px;
 }
 .join {
   display: flex;
@@ -41,139 +35,19 @@
 .join .q-field {
   width: 260px;
 }
-.hero-online {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  color: var(--sky);
-  font: 600 12px/1 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.hero-online i {
-  width: 7px;
-  height: 7px;
-  background: var(--good);
-  animation: blink 1.4s steps(1) infinite;
-}
-
-.sec {
-  display: grid;
-  gap: 18px;
-  margin-top: 88px;
-}
-
-.steps {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  padding: 0;
-  list-style: none;
-}
-.steps li {
-  display: grid;
-  gap: 8px;
-  padding: 22px;
-  color: var(--a);
-}
-.step-n {
-  color: var(--faint);
-  font: 600 12px/1 var(--mono);
-}
-.steps b {
-  margin-top: 6px;
-  color: var(--ink);
-  font-size: 17px;
-}
-.steps p,
-.feat p {
-  color: var(--muted);
+.home-err {
+  max-width: 520px;
+  color: var(--b-ink);
   font-size: 14px;
 }
 
-.feats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-}
-.feat {
-  display: flex;
-  gap: 14px;
-  padding: 20px;
-}
-.feat > svg {
-  flex: none;
-  margin-top: 2px;
-  color: var(--a);
-}
-.feat b {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 15px;
-}
-
-.rooms {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 14px;
-}
-.room-card {
-  display: grid;
-  gap: 12px;
-  padding: 10px;
-  color: var(--ink);
-  text-decoration: none;
-}
-.room-card img,
-.room-blank {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  background: var(--well);
-}
-.room-blank {
-  display: grid;
-  place-items: center;
-  color: var(--faint);
-  font: 600 11px/1 var(--mono);
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-}
-.room-card > div {
-  display: grid;
-  justify-items: start;
-  gap: 4px;
-  padding: 0 4px 4px;
-}
-.room-card small {
-  overflow: hidden;
-  max-width: 100%;
-  color: var(--muted);
-  font-size: 13px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.room-card .chip {
-  gap: 5px;
-  margin-top: 4px;
-}
-
-@media (max-width: 860px) {
-  .steps,
-  .feats {
-    grid-template-columns: 1fr;
-  }
-}
 @media (max-width: 560px) {
-  .join,
-  .join .q-field {
+  .hero-cta,
+  .join {
     width: 100%;
   }
   .join .q-field {
     flex: 1;
     width: auto;
-  }
-  .hero-cta {
-    width: 100%;
   }
 }

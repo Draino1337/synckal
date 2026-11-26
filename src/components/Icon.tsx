@@ -25,7 +25,9 @@ const P: Record<string, ReactNode> = {
   check: <path d="M13 3h2v2h-1v1h-1v1h-1v1h-1v1h-1v1H9v1H8v1H7v1H5v-1H4v-1H3v-1H2V9H1V7h2v1h1v1h1v1h1V9h1V8h1V7h1V6h1V5h1V4h1V3h1z" />,
   arrow: <path d="M8 2h2v1h1v1h1v1h1v1h1v1h1v2h-1v1h-1v1h-1v1h-1v1h-1v1H8v-2h1v-1h1v-1H1V7h9V6H9V5H8z" />,
   skip: <path d="M1 2h2v1h1v1h1v1h1v1h1V2h2v1h1v1h1v1h1v1h1V2h2v12h-2v-4h-1v1h-1v1h-1v1H9v1H7v-4H6v1H5v1H4v1H3v1H1z" />,
-  tv: <path d="M4 1h1v1h1v1h4V2h1V1h1v1h-1v1h3v1h1v9h-1v1H2v-1H1V4h1V3h3V2H4zM3 5v7h10V5z" />,
+  // логотип-«экранчик» с треугольником, как у кнопки YouTube
+  yt: <path d="M2 3h12v1h1v8h-1v1H2v-1H1V4h1zM6 5v6h1v-1h2V9h1V7H9V6H7V5z" fillRule="evenodd" />,
+  tv:<path d="M4 1h1v1h1v1h4V2h1V1h1v1h-1v1h3v1h1v9h-1v1H2v-1H1V4h1V3h3V2H4zM3 5v7h10V5z" />,
 };
 
 export function Icon({ name, size = 16, className }: { name: keyof typeof P | string; size?: number; className?: string }) {

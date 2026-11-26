@@ -49,6 +49,25 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
   const [vol, setVol] = useState(() => Number(store.get('vol') ?? 80));
   const [muted, setMuted] = useState(() => store.get('muted') === '1');
   const [full, setFull] = useState(false);
+  // субтитры по умолчанию выключены: YouTube сам включает их по настройкам аккаунта/браузера
+  const [cc, setCc] = useState(() => store.get('cc') === '1');
+  const ccRef = useRef(cc);
+  ccRef.current = cc;
+
+  /** включает/выключает модуль субтитров; YouTube грузит его заново с каждым видео, поэтому зовём часто */
+  const applyCc = useCallback(() => {
+    const p = yt.current;
+    if (!p) return;
+    try {
+      if (ccRef.current) p.loadModule('captions');
+      else {
+        p.unloadModule('captions');
+        p.unloadModule('cc');
+      }
+    } catch {
+      /* модуль ещё не готов — повторим на следующем событии */
+    }
+  }, []);
 
   const fail = (code: number | null) => {
     errorRef.current = code;
@@ -66,11 +85,27 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
       yt.current = new YT.Player(div, {
         width: '100%',
         height: '100%',
-        playerVars: { controls: 0, disablekb: 1, rel: 0, playsinline: 1, iv_load_policy: 3, fs: 0, modestbranding: 1, origin: location.origin },
+        playerVars: {
+          controls: 0,
+          disablekb: 1,
+          rel: 0,
+          playsinline: 1,
+          iv_load_policy: 3,
+          fs: 0,
+          modestbranding: 1,
+          cc_load_policy: ccRef.current ? 1 : 0,
+          origin: location.origin,
+        },
         events: {
           onReady: () => !dead && setReady(true),
+          // модуль субтитров подгрузился — сразу применяем выбор
+          onApiChange: () => applyCc(),
           onStateChange: (e: YT.PlayerEvent) => {
-            if (e.data === S.PLAYING) fail(null);
+            if (e.data === S.PLAYING) {
+              fail(null);
+              applyCc();
+              applyVol(); // новое видео может прийти со своей громкостью
+            }
             if (e.data === S.ENDED) {
               const s = P.current;
               if (s.playing && endedRev.current !== s.rev) {
@@ -195,16 +230,28 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
     return () => clearInterval(id);
   }, [sync, ready, serverNow]);
 
-  // громкость — у каждого своя
-  useEffect(() => {
+  // громкость — у каждого своя. Ползунок на нуле = без звука: setVolume(0) YouTube соблюдает не всегда
+  const volRef = useRef({ vol, silent: muted || blocked || vol === 0 });
+  volRef.current = { vol, silent: muted || blocked || vol === 0 };
+  const applyVol = useCallback(() => {
     const p = yt.current;
-    if (!p || !ready) return;
-    p.setVolume(vol);
-    if (muted || blocked) p.mute();
+    if (!p) return;
+    const { vol: v, silent } = volRef.current;
+    p.setVolume(v);
+    if (silent) p.mute();
     else p.unMute();
+  }, []);
+  useEffect(() => {
+    if (!ready) return;
+    applyVol();
     store.set('vol', String(vol));
     store.set('muted', muted ? '1' : '0');
-  }, [vol, muted, blocked, ready]);
+  }, [vol, muted, blocked, ready, applyVol]);
+
+  useEffect(() => {
+    store.set('cc', cc ? '1' : '0');
+    if (ready) applyCc();
+  }, [cc, ready, applyCc]);
 
   useEffect(() => {
     const on = () => setFull(document.fullscreenElement === box.current);
@@ -238,6 +285,12 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
     yt.current?.unMute();
     yt.current?.playVideo();
   };
+  const toggleMute = () => {
+    if (vol === 0) {
+      setVol(50);
+      setMuted(false);
+    } else setMuted((m) => !m);
+  };
   const resync = () => {
     lastSeek.current = 0;
     const p = yt.current;
@@ -249,11 +302,14 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
   keys.current = (e) => {
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.ctrlKey || e.metaKey || e.altKey) return;
+    // пробел на кнопке или ссылке нажимает её саму — иначе вышло бы два действия сразу
+    if (e.key === ' ' && (tag === 'BUTTON' || tag === 'A')) return;
     if (e.key === ' ' || e.key === 'k' || e.key === 'л') toggle();
+    else if (e.key === 'c' || e.key === 'с') setCc((v) => !v);
     else if (e.key === 'ArrowLeft') seekTo(localPos() - 5);
     else if (e.key === 'ArrowRight') seekTo(localPos() + 5);
     else if (e.key === 'f' || e.key === 'а') toggleFull();
-    else if (e.key === 'm' || e.key === 'ь') setMuted((m) => !m);
+    else if (e.key === 'm' || e.key === 'ь') toggleMute();
     else return;
     e.preventDefault();
   };
@@ -263,6 +319,19 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
     return () => window.removeEventListener('keydown', on);
   }, []);
 
+  // одиночный клик по видео — пауза, двойной — весь экран. Клик ждёт 250 мс, чтобы двойной не ставил паузу дважды
+  const clickTimer = useRef(0);
+  const shieldClick = () => {
+    clearTimeout(clickTimer.current);
+    clickTimer.current = window.setTimeout(toggle, 250);
+  };
+  const shieldDouble = () => {
+    clearTimeout(clickTimer.current);
+    toggleFull();
+  };
+  useEffect(() => () => clearTimeout(clickTimer.current), []);
+
+  const ytHref = player.videoId ? `https://www.youtube.com/watch?v=${player.videoId}&t=${Math.floor(cur)}s` : undefined;
   const shown = scrub ?? cur;
   const pct = dur ? (shown / dur) * 100 : 0;
   const has = !!player.videoId;
@@ -272,7 +341,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
       <div className="pl-screen">
         <div className="pl-yt" ref={host} />
         {/* перехватываем клики по видео: управление только через наши кнопки */}
-        <div className="pl-shield" onClick={toggle} onDoubleClick={toggleFull} />
+        <div className="pl-shield" onClick={shieldClick} onDoubleClick={shieldDouble} />
         {!has && (
           <div className="pl-empty">
             <pre className="pl-tv" aria-hidden="true">{TV}</pre>
@@ -336,7 +405,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
             )}
           </button>
           <div className="pl-vol">
-            <button className="pl-btn" onClick={() => setMuted((m) => !m)} aria-label={muted ? 'Включить звук' : 'Выключить звук'} title="M">
+            <button className="pl-btn" onClick={toggleMute} aria-label={muted || vol === 0 ? 'Включить звук' : 'Выключить звук'} title="M">
               <Icon name={muted || vol === 0 ? 'mute' : 'vol'} size={18} />
             </button>
             <input type="range" min={0} max={100} value={muted ? 0 : vol} aria-label="Громкость" onChange={(e) => (setVol(Number(e.target.value)), setMuted(false))} style={{ '--p': `${muted ? 0 : vol}%` } as React.CSSProperties} />
@@ -345,7 +414,26 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
             {fmtTime(shown)} <i>/</i> {fmtTime(dur)}
           </span>
           <span className="pl-gap" />
-          <button className="pl-btn" onClick={resync} disabled={!has} title="Догнать остальных" aria-label="Синхронизировать">
+          <button
+            className={cc ? 'pl-btn pl-cc is-on' : 'pl-btn pl-cc'}
+            onClick={() => setCc((v) => !v)}
+            disabled={!has}
+            aria-pressed={cc}
+            aria-label={cc ? 'Выключить субтитры' : 'Включить субтитры'}
+            title="Субтитры (C)"
+          >
+            CC
+          </button>
+          {ytHref ? (
+            <a className="pl-btn" href={ytHref} target="_blank" rel="noreferrer" title="Открыть на YouTube" aria-label="Открыть на YouTube">
+              <Icon name="yt" size={18} />
+            </a>
+          ) : (
+            <button className="pl-btn" disabled aria-label="Открыть на YouTube">
+              <Icon name="yt" size={18} />
+            </button>
+          )}
+          <button className="pl-btn pl-sync" onClick={resync} disabled={!has} title="Догнать остальных" aria-label="Синхронизировать">
             <Icon name="sync" size={18} />
           </button>
           <select
