@@ -490,11 +490,11 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
             CC
           </button>
           {ytHref ? (
-            <a className="pl-btn" href={ytHref} target="_blank" rel="noreferrer" title="Открыть на YouTube" aria-label="Открыть на YouTube">
+            <a className="pl-btn pl-ytl" href={ytHref} target="_blank" rel="noreferrer" title="Открыть на YouTube" aria-label="Открыть на YouTube">
               <Icon name="yt" size={18} />
             </a>
           ) : (
-            <button className="pl-btn" disabled aria-label="Открыть на YouTube">
+            <button className="pl-btn pl-ytl" disabled aria-label="Открыть на YouTube">
               <Icon name="yt" size={18} />
             </button>
           )}

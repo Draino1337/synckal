@@ -4,7 +4,7 @@ import { useRoom } from '../lib/room.ts';
 import { randomName, store } from '../lib/util.ts';
 import { link } from '../router.ts';
 import { Player } from '../components/Player.tsx';
-import { Queue } from '../components/Queue.tsx';
+import { Queue, QueueAdd } from '../components/Queue.tsx';
 import { Chat } from '../components/Chat.tsx';
 import { Users } from '../components/Users.tsx';
 import { Icon } from '../components/Icon.tsx';
@@ -53,6 +53,14 @@ export function Room({ id }: { id: string }) {
   const { status, room, chat, you, send, serverNow, toast, notify } = useRoom(id, name);
   const info = useVideoInfo(room?.player.videoId ?? null);
   const [toastOn, setToastOn] = useState(false);
+  // чат и очередь — вкладки одной панели; пока открыта очередь, считаем непрочитанные сообщения
+  const [tab, setTab] = useState<'chat' | 'queue'>('chat');
+  const [seen, setSeen] = useState(0);
+  const said = chat.filter((m) => !m.sys).length;
+  useEffect(() => {
+    if (tab === 'chat') setSeen(said);
+  }, [tab, said]);
+  const unread = tab === 'queue' ? Math.max(0, said - seen) : 0;
 
   useEffect(() => {
     if (!toast) return;
@@ -138,39 +146,52 @@ export function Room({ id }: { id: string }) {
 
   return (
     <div className="room">
-      <div className="room-top">
-        <h1 className="room-name">{room.settings.title || 'Комната'}</h1>
-        <button className="room-code chip" onClick={copy} title="Скопировать ссылку-приглашение">
-          /r/{id}
-        </button>
-        <button className="btn btn-ghost btn-sm" onClick={copy}>
-          <Icon name={copied ? 'check' : 'copy'} /> {copied ? 'Скопировано' : 'Пригласить'}
-        </button>
-        {status === 'reconnecting' && <span className="room-warn">Связь потеряна, переподключаемся…</span>}
-      </div>
-
       <div className="room-grid">
         <div className="room-main">
-          <Player player={room.player} serverNow={serverNow} canControl={canControl} send={send} skip={room.skip} notify={notify} info={info} />
-          <div className="now">
-            {room.player.videoId ? (
-              <>
-                <span className="label">Сейчас играет</span>
-                <h2 className="now-title">{room.player.title}</h2>
-                <div className="now-meta">
-                  {room.player.author && <small>{room.player.author}</small>}
-                  <Votes info={info} />
-                </div>
-              </>
-            ) : (
-              <span className="label">Ничего не играет</span>
-            )}
+          <div className="room-play">
+            <QueueAdd hasVideo={!!room.player.videoId} canControl={canControl} send={send} />
+            <div className="room-stage">
+              <Player player={room.player} serverNow={serverNow} canControl={canControl} send={send} skip={room.skip} notify={notify} info={info} />
+              {status === 'reconnecting' && <span className="room-warn px px-raised">Связь потеряна, переподключаемся…</span>}
+            </div>
+            <div className="now">
+              {room.player.videoId ? (
+                <>
+                  <h2 className="now-title" title={room.player.title}>
+                    {room.player.title}
+                  </h2>
+                  <div className="now-meta">
+                    {room.player.author && <small>{room.player.author}</small>}
+                    <Votes info={info} />
+                  </div>
+                </>
+              ) : (
+                <span className="label">Ничего не играет</span>
+              )}
+            </div>
           </div>
-          <Queue queue={room.queue} player={room.player} canControl={canControl} send={send} />
         </div>
         <aside className="room-side">
-          <Users room={room} you={you} myRole={myRole} send={send} onRename={() => setRenaming(true)} />
-          <Chat chat={chat} you={you} canControl={canControl} send={send} />
+          <Users room={room} you={you} myRole={myRole} send={send} onRename={() => setRenaming(true)} onInvite={copy} copied={copied} />
+          <section className="feed px">
+            <div className="feed-tabs" role="tablist">
+              <button role="tab" aria-selected={tab === 'chat'} className={tab === 'chat' ? 'feed-tab is-on' : 'feed-tab'} onClick={() => setTab('chat')}>
+                <Icon name="chat" size={14} /> Чат
+                {unread > 0 && <b className="feed-badge">{unread > 99 ? '99+' : unread}</b>}
+              </button>
+              <button role="tab" aria-selected={tab === 'queue'} className={tab === 'queue' ? 'feed-tab is-on' : 'feed-tab'} onClick={() => setTab('queue')}>
+                <Icon name="list" size={14} /> Очередь
+                <em>{room.queue.length}</em>
+              </button>
+            </div>
+            {/* обе вкладки держим смонтированными: не теряются прокрутка и недописанное сообщение */}
+            <div className="feed-body" hidden={tab !== 'chat'}>
+              <Chat chat={chat} you={you} canControl={canControl} send={send} />
+            </div>
+            <div className="feed-body" hidden={tab !== 'queue'}>
+              <Queue queue={room.queue} player={room.player} canControl={canControl} send={send} />
+            </div>
+          </section>
         </aside>
       </div>
 

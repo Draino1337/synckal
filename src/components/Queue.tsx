@@ -3,6 +3,69 @@ import type { PlayerState, QueueItem } from '../lib/room.ts';
 import { findYoutube, thumb } from '../lib/util.ts';
 import { Icon } from './Icon.tsx';
 
+interface AddProps {
+  hasVideo: boolean;
+  canControl: boolean;
+  send: (m: Record<string, unknown>) => void;
+}
+
+/** Поле для ссылки над плеером: в конец очереди, следующим или сразу. */
+export function QueueAdd({ hasVideo, canControl, send }: AddProps) {
+  const [url, setUrl] = useState('');
+  const [bad, setBad] = useState(false); // ссылка не похожа на YouTube — поле не очищаем
+
+  const add = (mode: 'end' | 'next' | 'now') => {
+    const v = url.trim();
+    if (!v) return;
+    if (!/^[\w-]{11}$/.test(v) && !findYoutube(v)) return setBad(true);
+    send({ t: 'add', url: v, mode });
+    setUrl('');
+  };
+
+  return (
+    <form
+      className="q-add"
+      onSubmit={(e) => {
+        e.preventDefault();
+        add('end');
+      }}
+    >
+      <label className={bad ? 'q-field px px-well is-bad' : 'q-field px px-well'}>
+        <Icon name="link" />
+        <input
+          value={url}
+          onChange={(e) => (setUrl(e.target.value), setBad(false))}
+          onPaste={(e) => {
+            // вставили ссылку в пустое поле — сразу добавляем
+            const text = e.clipboardData.getData('text').trim();
+            if (!url && findYoutube(text) && canControl) {
+              e.preventDefault();
+              send({ t: 'add', url: text, mode: hasVideo ? 'end' : 'now' });
+            }
+          }}
+          placeholder={canControl ? 'Вставь ссылку на YouTube' : 'Добавлять видео может ведущий'}
+          disabled={!canControl}
+          aria-label="Ссылка на видео YouTube"
+          aria-invalid={bad}
+          title={bad ? 'Нужна ссылка вида youtube.com/watch?v=… или youtu.be/…' : undefined}
+        />
+        {bad && <span className="q-bad">не YouTube</span>}
+      </label>
+      <div className="q-modes">
+        <button type="submit" className="btn btn-primary btn-sm" disabled={!canControl || !url.trim()}>
+          <Icon name="plus" /> В очередь
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={!canControl || !url.trim()} onClick={() => add('next')} title="Поставить следующим">
+          Следующим
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={!canControl || !url.trim()} onClick={() => add('now')} title="Включить прямо сейчас">
+          Сейчас
+        </button>
+      </div>
+    </form>
+  );
+}
+
 interface Props {
   queue: QueueItem[];
   player: PlayerState;
@@ -10,12 +73,10 @@ interface Props {
   send: (m: Record<string, unknown>) => void;
 }
 
-/** Плейлист: поле для ссылки, сейчас играет и очередь с перетаскиванием. */
+/** Очередь с перетаскиванием (вкладка рядом с чатом). */
 export function Queue({ queue, player, canControl, send }: Props) {
-  const [url, setUrl] = useState('');
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<number | null>(null);
-  const [bad, setBad] = useState(false); // ссылка не похожа на YouTube — поле не очищаем
   // «Очистить» спрашивает подтверждение вторым нажатием; через 3 с вопрос сам исчезает
   const [sure, setSure] = useState(false);
   useEffect(() => {
@@ -24,63 +85,15 @@ export function Queue({ queue, player, canControl, send }: Props) {
     return () => clearTimeout(t);
   }, [sure]);
 
-  const add = (mode: 'end' | 'next' | 'now') => {
-    const v = url.trim();
-    if (!v) return;
-    if (!/^[w-]{11}$/.test(v) && !findYoutube(v)) return setBad(true);
-    send({ t: 'add', url: v, mode });
-    setUrl('');
-  };
-
   return (
-    <section className="q px">
-      <form
-        className="q-add"
-        onSubmit={(e) => {
-          e.preventDefault();
-          add('end');
-        }}
-      >
-        <label className="q-field px px-well">
-          <Icon name="link" />
-          <input
-            value={url}
-            onChange={(e) => (setUrl(e.target.value), setBad(false))}
-            onPaste={(e) => {
-              // вставили ссылку в пустое поле — сразу добавляем в конец
-              const text = e.clipboardData.getData('text').trim();
-              if (!url && /youtu\.?be/.test(text) && canControl) {
-                e.preventDefault();
-                send({ t: 'add', url: text, mode: player.videoId ? 'end' : 'now' });
-              }
-            }}
-            placeholder={canControl ? 'Вставь ссылку на YouTube' : 'Добавлять видео может ведущий'}
-            disabled={!canControl}
-            aria-label="Ссылка на видео YouTube"
-          />
-        </label>
-        <div className="q-modes">
-          <button type="submit" className="btn btn-primary btn-sm" disabled={!canControl || !url.trim()}>
-            <Icon name="plus" /> В очередь
-          </button>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={!canControl || !url.trim()} onClick={() => add('next')} title="Поставить следующим">
-            Следующим
-          </button>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={!canControl || !url.trim()} onClick={() => add('now')} title="Включить прямо сейчас">
-            Сейчас
-          </button>
-        </div>
-      </form>
-      {bad && <p className="q-bad">Это не похоже на ссылку YouTube — нужна ссылка вида youtube.com/watch?v=… или youtu.be/…</p>}
-
-      <div className="q-head">
-        <span className="label">Очередь · {queue.length}</span>
-        {canControl && queue.length > 1 && (
-          <button className="q-tool" onClick={() => send({ t: 'shuffle' })} title="Перемешать">
-            <Icon name="shuffle" /> Перемешать
-          </button>
-        )}
-        {canControl && queue.length > 0 && (
+    <div className="q">
+      {canControl && queue.length > 0 && (
+        <div className="q-head">
+          {queue.length > 1 && (
+            <button className="q-tool" onClick={() => send({ t: 'shuffle' })} title="Перемешать">
+              <Icon name="shuffle" /> Перемешать
+            </button>
+          )}
           <button
             className={sure ? 'q-tool is-sure' : 'q-tool'}
             onClick={() => {
@@ -92,12 +105,12 @@ export function Queue({ queue, player, canControl, send }: Props) {
           >
             <Icon name="x" /> {sure ? 'Точно очистить?' : 'Очистить'}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {queue.length === 0 ? (
         <p className="q-none">
-          Очередь пуста. {player.videoId ? 'Когда видео закончится, плеер остановится.' : 'Добавь первое видео — оно сразу включится.'}
+          Очередь пуста. {player.videoId ? 'Когда видео закончится, плеер остановится.' : 'Вставь ссылку сверху — видео сразу включится.'}
         </p>
       ) : (
         <ol className="q-list" onDragLeave={() => setOver(null)}>
@@ -155,6 +168,6 @@ export function Queue({ queue, player, canControl, send }: Props) {
           ))}
         </ol>
       )}
-    </section>
+    </div>
   );
 }

@@ -1,56 +1,80 @@
 /* ───────── комната ───────── */
+/* на широком экране страница ровно в окно и не прокручивается: плеер подстраивается под высоту,
+   прокручиваются только чат и очередь */
 .room {
-  max-width: 1640px;
+  max-width: 1720px;
   margin: 0 auto;
-  padding: 18px 24px 40px;
-}
-.room-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
-  margin-bottom: 16px;
-}
-.room-name {
-  font: 400 24px/1 var(--dot);
-  letter-spacing: -1px;
-}
-.room-code {
-  cursor: pointer;
-  text-transform: none;
-  letter-spacing: 0.04em;
-}
-.room-warn {
-  color: var(--b);
-  font: 600 12px/1 var(--mono);
-  animation: blink 1.2s steps(1) infinite;
+  padding: 16px 24px;
 }
 .room-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 380px;
   gap: 18px;
-  align-items: start;
 }
 .room-main {
-  display: grid;
-  gap: 14px;
   min-width: 0;
 }
-/* боковая колонка прилипает и занимает высоту окна: чат растягивается */
+.room-play {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin: 0 auto;
+}
+.room-stage {
+  position: relative;
+}
+.room-warn {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  z-index: 7;
+  padding: 8px 12px;
+  color: var(--b-ink);
+  font: 600 12px/1 var(--mono);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  --rim: var(--b);
+  animation: blink 1.2s steps(1) infinite;
+}
 .room-side {
-  position: sticky;
-  top: calc(var(--hdr) + 16px);
   display: flex;
   flex-direction: column;
   gap: 14px;
-  height: calc(100vh - var(--hdr) - 32px);
-  height: calc(100svh - var(--hdr) - 32px);
-  min-height: 520px;
+  min-height: 0;
 }
-
+@media (min-width: 1081px) {
+  .room {
+    height: calc(100vh - var(--hdr));
+    height: calc(100svh - var(--hdr));
+    overflow: hidden;
+  }
+  .room-grid {
+    height: 100%;
+  }
+  /* --reserve: поле ссылки, подпись под видео, панель плеера и отступы — всё, что по высоте не видео */
+  .room-main {
+    container-type: size;
+    min-height: 0;
+    --reserve: 200px;
+  }
+  .room-play {
+    width: min(100%, calc((100cqh - var(--reserve)) * 16 / 9));
+  }
+  /* поле ссылки — всегда одна строка, иначе высота «поедет» */
+  .room-play .q-add {
+    flex-wrap: nowrap;
+  }
+  .room-play .q-add .q-field {
+    flex: 1 1 0;
+  }
+  .room-play .q-modes .btn {
+    padding: 0 12px;
+  }
+}
 .now {
   display: grid;
   gap: 6px;
+  min-width: 0;
   padding: 0 2px;
 }
 .now-title {
@@ -60,6 +84,9 @@
   letter-spacing: -0.02em;
   line-height: 1.25;
   text-decoration: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .now-meta {
   display: flex;
@@ -145,6 +172,7 @@
 /* ───────── плеер ───────── */
 .pl {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   background: #000;
   /* ступенчатые углы, как у панелей сайта */
   clip-path: polygon(
@@ -448,8 +476,8 @@ a.pl-btn {
 /* ───────── плейлист ───────── */
 .q {
   display: grid;
-  gap: 14px;
-  padding: 16px;
+  align-content: start;
+  gap: 10px;
 }
 .q-add {
   display: flex;
@@ -471,8 +499,8 @@ a.pl-btn {
   align-items: center;
   gap: 14px;
 }
-.q-head .label {
-  margin-right: auto;
+.q-head {
+  justify-content: flex-end;
 }
 .q-tool {
   display: inline-flex;
@@ -587,9 +615,19 @@ a.pl-btn {
   align-content: start;
   gap: 12px;
   flex: none;
-  max-height: 46%;
+  max-height: 52%;
   overflow: auto;
   padding: 14px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line3) transparent;
+}
+.u-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.u-acts .btn-danger {
+  margin-top: 0;
 }
 .chat-head {
   display: flex;
@@ -688,11 +726,94 @@ a.pl-btn {
 /* ───────── чат ───────── */
 .chat {
   display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 10px;
+}
+
+/* ───────── чат и очередь — вкладки одной панели ───────── */
+.feed {
+  display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  padding: 14px 16px;
-  gap: 10px;
+  padding: 10px 16px 14px;
+  gap: 12px;
+}
+.feed-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line2);
+}
+.feed-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: 800 11.5px/1 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.feed-tab:hover {
+  color: var(--ink);
+}
+.feed-tab.is-on {
+  color: var(--a-ink);
+}
+/* подчёркивание активной вкладки «выезжает» ступеньками */
+.feed-tab::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 3px;
+  background: var(--a);
+  transform: scaleX(0);
+  transition: transform 0.2s steps(4);
+}
+.feed-tab.is-on::after {
+  transform: none;
+}
+.feed-tab em {
+  min-width: 18px;
+  padding: 2px 5px;
+  background: var(--soft);
+  color: var(--ink);
+  font-style: normal;
+  letter-spacing: 0;
+  text-align: center;
+}
+.feed-tab.is-on em {
+  background: var(--a-f);
+  color: var(--a-ink);
+}
+.feed-badge {
+  padding: 2px 5px;
+  background: var(--a);
+  color: var(--bg);
+  font: 800 10px/1 var(--mono);
+  letter-spacing: 0;
+  animation: blink 1.2s 3 steps(1);
+}
+.feed-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line3) transparent;
+}
+.feed-body:has(.chat) {
+  overflow: hidden;
+}
+.feed-body[hidden] {
+  display: none;
 }
 .chat-list {
   display: grid;
@@ -776,16 +897,11 @@ a.pl-btn {
   .room-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .room-side {
-    position: static;
-    height: auto;
-    min-height: 0;
-  }
   .users {
     max-height: none;
   }
-  .chat {
-    height: 460px;
+  .feed {
+    height: 520px;
     flex: none;
   }
 }
@@ -826,13 +942,19 @@ a.pl-btn {
   }
   .q-modes .btn {
     flex: 1;
-    padding: 0 10px;
+    min-width: 0;
+    padding: 0 8px;
   }
 }
 /* совсем узкие телефоны: «догнать» прячем — подмотка и так автоматическая */
 @media (max-width: 480px) {
-  .pl-sync {
+  /* на телефоне панель плеера не влезает: «синхронизировать» и «открыть на YouTube» прячем */
+  .pl-sync,
+  .pl-ytl {
     display: none;
+  }
+  .pl-rate {
+    padding: 0 2px;
   }
 }
 
@@ -842,10 +964,14 @@ a.pl-btn {
   color: var(--b);
 }
 
+.q-field.is-bad {
+  --rim: var(--b);
+}
 .q-bad {
-  margin: -4px 0 0;
+  flex: none;
   color: var(--b-ink);
-  font-size: 13px;
+  font: 700 11px/1 var(--mono);
+  text-transform: uppercase;
 }
 
 /* ───────── качество видео ───────── */

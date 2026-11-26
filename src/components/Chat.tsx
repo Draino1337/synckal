@@ -41,10 +41,7 @@ export function Chat({ chat, you, canControl, send }: Props) {
   }, [chat]);
 
   return (
-    <section className="chat px">
-      <div className="chat-head">
-        <span className="label">Чат</span>
-      </div>
+    <div className="chat">
       <div
         className="chat-list"
         ref={list}
@@ -96,6 +93,6 @@ export function Chat({ chat, you, canControl, send }: Props) {
           <Icon name="arrow" />
         </button>
       </form>
-    </section>
+    </div>
   );
 }

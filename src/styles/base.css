@@ -456,7 +456,9 @@ a {
 }
 
 /* ───────── всплывающее уведомление ───────── */
-.toast {
+/* .toast.px — класс .px задаёт position: relative, без этого тост оказывался внизу страницы, а не поверх неё */
+.toast,
+.toast.px {
   position: fixed;
   left: 50%;
   bottom: 24px;

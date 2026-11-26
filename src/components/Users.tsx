@@ -8,10 +8,12 @@ interface Props {
   myRole: Role;
   send: (m: Record<string, unknown>) => void;
   onRename: () => void;
+  onInvite: () => void;
+  copied: boolean;
 }
 
 /** Участники и настройки комнаты (настройки видит только ведущий). */
-export function Users({ room, you, myRole, send, onRename }: Props) {
+export function Users({ room, you, myRole, send, onRename, onInvite, copied }: Props) {
   const [menu, setMenu] = useState<string | null>(null);
   const [sureCrown, setSureCrown] = useState(false);
   const [sureDisband, setSureDisband] = useState(false); // «Распустить» — тоже вторым нажатием
@@ -125,6 +127,10 @@ export function Users({ room, you, myRole, send, onRename }: Props) {
         </p>
       )}
 
+      <div className="u-acts">
+        <button className="btn btn-ghost btn-sm" onClick={onInvite} title={'Скопировать ссылку /r/' + room.id}>
+          <Icon name={copied ? 'check' : 'copy'} /> {copied ? 'Скопировано' : 'Пригласить'}
+        </button>
       {creator && (
         <button
           className={sureDisband ? 'btn btn-ghost btn-sm btn-danger is-sure' : 'btn btn-ghost btn-sm btn-danger'}
@@ -133,9 +139,10 @@ export function Users({ room, you, myRole, send, onRename }: Props) {
             send({ t: 'disband' });
           }}
         >
-          <Icon name="x" /> {sureDisband ? 'Точно? Все выйдут из комнаты' : 'Распустить комнату'}
+          <Icon name="x" /> {sureDisband ? 'Точно? Все выйдут' : 'Распустить комнату'}
         </button>
       )}
+      </div>
     </section>
   );
 }
