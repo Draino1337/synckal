@@ -347,6 +347,7 @@ const handlers = {
       return room.sync();
     }
     // без прав — голос за пропуск
+    if (room.skipVotes.has(m.cid)) return;
     room.skipVotes.add(m.cid);
     if (room.skipVotes.size >= room.skipNeed()) {
       room.say('Большинство проголосовало — видео пропущено');
@@ -355,7 +356,9 @@ const handlers = {
     room.sync();
   },
   ended(room, m, d) {
-    // первый, у кого видео закончилось, переключает; остальные «ended» по тому же rev игнорируются
+    // первый, у кого видео закончилось, переключает; остальные «ended» по тому же rev игнорируются.
+    // В закрытой комнате слушаем только ведущего и модераторов, иначе это пропуск в обход голосования
+    if (!room.canControl(m.cid)) return;
     if (d.rev !== room.player.rev || !room.player.videoId) return;
     room.next();
     room.sync();
@@ -392,6 +395,8 @@ const handlers = {
   name(room, m, d) {
     const name = clip(d.name, 24);
     if (!name || name === m.name) return;
+    if (now() - (m.lastChat ?? 0) < 350) return; // тот же антифлуд, что у чата: смена ника пишет в чат
+    m.lastChat = now();
     room.say(`${m.name} теперь ${name}`);
     for (const x of room.members.values()) if (x.cid === m.cid) x.name = name;
     room.sync();
@@ -467,12 +472,20 @@ const MIME = {
   '.webp': 'image/webp',
 };
 
+// плеер — iframe API YouTube, обложки и раскадровки — i.ytimg.com; frame-ancestors запрещает встраивать сайт в чужой iframe
+const CSP =
+  "default-src 'self'; script-src 'self' https://www.youtube.com; frame-src https://www.youtube.com; img-src 'self' data: https://i.ytimg.com; " +
+  "style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+
 function json(res, code, body) {
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(JSON.stringify(body));
 }
 
 const server = http.createServer((req, res) => {
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('strict-transport-security', 'max-age=31536000');
+  res.setHeader('content-security-policy', CSP);
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/api/new' && req.method === 'POST') return json(res, 200, { room: roomCode() });
   if (url.pathname === '/api/rooms') {
@@ -539,6 +552,7 @@ wss.on('connection', (ws) => {
   /** @type {Member | null} */
   let me = null;
   ws.isAlive = true;
+  ws.on('error', () => {}); // битый или слишком большой кадр: ws закроет только это соединение, без обработчика падает весь процесс
   ws.on('pong', () => (ws.isAlive = true));
 
   ws.on('message', async (raw) => {
