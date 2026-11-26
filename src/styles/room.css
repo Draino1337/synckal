@@ -121,47 +121,132 @@
   opacity: 0.6;
   animation: blink 1.2s steps(1) infinite;
 }
+/* плашка: внешний span — для искр (без обрезки), внутренний — со ступенчатыми углами */
 .vote {
+  position: relative;
+  display: inline-flex;
+  cursor: default;
+}
+.vote-box {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 9px;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px 0 9px;
   background: var(--well);
-  box-shadow: inset 0 0 0 1px var(--line2);
   color: var(--ink);
-  font: 700 12.5px/1 var(--mono);
-  clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px));
+  font: 700 13px/1 var(--mono);
+  clip-path: polygon(0 4px, 2px 4px, 2px 2px, 4px 2px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px), 0 calc(100% - 4px));
+  transition: background 0.15s steps(2), color 0.15s steps(2);
 }
-.vote.is-like {
-  background: rgba(184, 167, 240, 0.14);
-  box-shadow: inset 0 0 0 1px var(--a-deep);
+.vote-box b {
+  min-width: 2ch;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+}
+.vote.is-like .vote-box {
+  background: linear-gradient(180deg, rgba(184, 167, 240, 0.26), rgba(184, 167, 240, 0.12));
+  box-shadow: inset 0 0 0 1px rgba(184, 167, 240, 0.55);
   color: var(--a-ink);
+}
+.vote.is-like:hover .vote-box {
+  background: var(--a);
+  color: var(--bg);
+}
+.vote.is-dislike .vote-box {
+  box-shadow: inset 0 0 0 1px var(--line3);
+  color: var(--dim);
+}
+.vote.is-dislike:hover .vote-box {
+  background: var(--soft);
+  color: var(--ink);
+}
+.vote svg {
+  flex: none;
 }
 .vote.is-like svg {
   color: var(--a);
 }
+.vote.is-like:hover svg {
+  color: var(--bg);
+  animation: thumb-up 0.5s steps(4);
+}
+/* дизлайк — тот же палец, отражённый по вертикали */
 .vote.is-dislike svg {
   color: var(--muted);
-  transform: rotate(180deg);
+  transform: scaleY(-1);
 }
-.vote-bar {
-  position: relative;
-  width: 96px;
-  height: 8px;
-  background: repeating-linear-gradient(90deg, var(--line2) 0 4px, transparent 4px 6px);
+.vote.is-dislike:hover svg {
+  animation: thumb-down 0.5s steps(4);
 }
-.vote-bar i {
+@keyframes thumb-up {
+  40% {
+    transform: translateY(-3px) rotate(-12deg);
+  }
+}
+@keyframes thumb-down {
+  40% {
+    transform: scaleY(-1) translateY(-3px) rotate(12deg);
+  }
+}
+/* ASCII-искры */
+.vote-burst {
   position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--r);
-  background: repeating-linear-gradient(90deg, var(--a) 0 4px, transparent 4px 6px);
-  box-shadow: 0 0 10px rgba(184, 167, 240, 0.35);
-  animation: bar-fill 0.7s steps(8);
+  left: 16px;
+  top: 0;
+  z-index: 2;
+  pointer-events: none;
 }
-@keyframes bar-fill {
-  from {
-    width: 0;
+.vote-burst i {
+  position: absolute;
+  left: 0;
+  top: -8px;
+  font: 800 14px/1 var(--mono);
+  font-style: normal;
+  opacity: 0;
+  animation: spark-up 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.vote.is-like .vote-burst i {
+  color: var(--a-ink);
+  text-shadow: 0 0 6px rgba(184, 167, 240, 0.8);
+}
+.vote.is-dislike .vote-burst {
+  top: 100%;
+}
+.vote.is-dislike .vote-burst i {
+  top: -4px;
+  color: var(--dim);
+  animation-name: spark-down;
+}
+@keyframes spark-up {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), -26px);
+  }
+}
+@keyframes spark-down {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  70% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), 18px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vote-burst {
+    display: none;
   }
 }
 .vote-views {
@@ -622,9 +707,13 @@ a.pl-btn {
   scrollbar-color: var(--line3) transparent;
 }
 .u-acts {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
   gap: 8px;
+}
+.u-acts .btn {
+  padding: 0 12px;
 }
 .u-acts .btn-danger {
   margin-top: 0;
@@ -1228,4 +1317,17 @@ a.pl-btn {
   66% {
     transform: translateX(3px);
   }
+}
+
+/* подписи кнопки сложены в одну клетку: ширина — по самой длинной, ничего не сдвигается */
+.swap {
+  display: inline-grid;
+}
+.swap > span {
+  grid-area: 1 / 1;
+  text-align: center;
+}
+.swap > [hidden] {
+  display: block;
+  visibility: hidden;
 }

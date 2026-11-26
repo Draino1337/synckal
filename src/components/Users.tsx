@@ -129,7 +129,11 @@ export function Users({ room, you, myRole, send, onRename, onInvite, copied }: P
 
       <div className="u-acts">
         <button className="btn btn-ghost btn-sm" onClick={onInvite} title={'Скопировать ссылку /r/' + room.id}>
-          <Icon name={copied ? 'check' : 'copy'} /> {copied ? 'Скопировано' : 'Пригласить'}
+          <Icon name={copied ? 'check' : 'copy'} />
+          <span className="swap">
+            <span hidden={copied}>Пригласить</span>
+            <span hidden={!copied}>Скопировано</span>
+          </span>
         </button>
       {creator && (
         <button
@@ -139,7 +143,11 @@ export function Users({ room, you, myRole, send, onRename, onInvite, copied }: P
             send({ t: 'disband' });
           }}
         >
-          <Icon name="x" /> {sureDisband ? 'Точно? Все выйдут' : 'Распустить комнату'}
+          <Icon name="x" />
+          <span className="swap">
+            <span hidden={sureDisband}>Распустить комнату</span>
+            <span hidden={!sureDisband}>Точно? Все выйдут</span>
+          </span>
         </button>
       )}
       </div>
