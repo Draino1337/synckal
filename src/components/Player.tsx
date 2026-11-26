@@ -3,6 +3,7 @@ import { expectedPos, type PlayerState } from '../lib/room.ts';
 import { loadYT, S, YT_ERRORS } from '../lib/youtube.ts';
 import { fmtTime, store } from '../lib/util.ts';
 import { Icon } from './Icon.tsx';
+import { QualityMenu, frameGeometry, qLabel, type Quality } from './Quality.tsx';
 
 interface Props {
   player: PlayerState;
@@ -25,6 +26,7 @@ const DRIFT_PAUSED = 0.4;
 export function Player({ player, serverNow, canControl, send, skip, notify }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
+  const screen = useRef<HTMLDivElement>(null);
   const yt = useRef<YT.Player | null>(null);
   const [ready, setReady] = useState(false);
   const P = useRef(player);
@@ -53,6 +55,23 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
   const [cc, setCc] = useState(() => store.get('cc') === '1');
   const ccRef = useRef(cc);
   ccRef.current = cc;
+  const [ytState, setYtState] = useState<number>(S.UNSTARTED);
+  // качество: YouTube выбирает его по размеру плеера (setPlaybackQuality давно не работает),
+  // поэтому рисуем плеер в нужном разрешении и масштабируем под экран
+  const [quality, setQuality] = useState<Quality>(() => {
+    const q = store.get('q');
+    return q === 'large' || q === 'hd720' || q === 'hd1080' || q === 'hd1440' || q === 'hd2160' ? q : 'auto';
+  });
+  const [levels, setLevels] = useState<string[]>([]);
+  const [actual, setActual] = useState('');
+  const [flash, setFlash] = useState(0); // крупная надпись с новым качеством поверх видео
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = screen.current!;
+    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   /** включает/выключает модуль субтитров; YouTube грузит его заново с каждым видео, поэтому зовём часто */
   const applyCc = useCallback(() => {
@@ -101,7 +120,10 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
           // модуль субтитров подгрузился — сразу применяем выбор
           onApiChange: () => applyCc(),
           onStateChange: (e: YT.PlayerEvent) => {
+            setYtState(e.data);
             if (e.data === S.PLAYING) {
+              const lv = e.target.getAvailableQualityLevels?.() ?? [];
+              setLevels(lv.filter((q) => q !== 'auto'));
               fail(null);
               applyCc();
               applyVol(); // новое видео может прийти со своей громкостью
@@ -114,6 +136,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
               }
             }
           },
+          onPlaybackQualityChange: (e: { data: string }) => setActual(e.data),
           onError: (e: YT.PlayerEvent) => fail(e.data),
           onAutoplayBlocked: () => setBlocked(true),
         },
@@ -226,6 +249,9 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
       setDur(p.getDuration() || 0);
       setBuf(p.getVideoLoadedFraction() || 0);
       setWaiting(s.playing && st === S.BUFFERING);
+      setYtState(st);
+      const q = p.getPlaybackQuality?.();
+      if (q && q !== 'unknown') setActual(q);
     }, 250);
     return () => clearInterval(id);
   }, [sync, ready, serverNow]);
@@ -247,6 +273,10 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
     store.set('vol', String(vol));
     store.set('muted', muted ? '1' : '0');
   }, [vol, muted, blocked, ready, applyVol]);
+
+  useEffect(() => {
+    store.set('q', quality);
+  }, [quality]);
 
   useEffect(() => {
     store.set('cc', cc ? '1' : '0');
@@ -335,11 +365,27 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
   const shown = scrub ?? cur;
   const pct = dur ? (shown / dur) * 100 : 0;
   const has = !!player.videoId;
+  const geo = frameGeometry(size, quality);
+  const poster = !ready || ytState === S.CUED || ytState === S.UNSTARTED || ytState === S.ENDED;
 
   return (
     <div className={full ? 'pl is-full' : 'pl'} ref={box}>
-      <div className="pl-screen">
-        <div className="pl-yt" ref={host} />
+      <div className="pl-screen" ref={screen}>
+        <div
+          className="pl-yt"
+          ref={host}
+          style={{ width: geo.w, height: geo.h, transform: `translateY(${-geo.m * geo.s}px) scale(${geo.s})` }}
+        />
+        {/* вместо заставки YouTube с красной кнопкой и концовки с рекомендациями — своя обложка */}
+        {has && poster && error === null && (
+          <div className="pl-poster">
+            <Poster id={player.videoId!} />
+            <span className="pl-poster-tag px px-raised">
+              <Icon name={player.playing ? 'tv' : 'pause'} size={14} />
+              {player.playing ? 'Загружаем…' : `Пауза · ${fmtTime(cur)}`}
+            </span>
+          </div>
+        )}
         {/* перехватываем клики по видео: управление только через наши кнопки */}
         <div className="pl-shield" onClick={shieldClick} onDoubleClick={shieldDouble} />
         {!has && (
@@ -363,6 +409,11 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
           </button>
         )}
         {has && waiting && !error && <div className="pl-wait" aria-label="Загрузка" />}
+        {flash > 0 && (
+          <div key={flash} className="pl-qflash" aria-hidden="true">
+            {qLabel(quality)}
+          </div>
+        )}
       </div>
 
       <div className="pl-bar">
@@ -433,6 +484,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
               <Icon name="yt" size={18} />
             </button>
           )}
+          <QualityMenu quality={quality} levels={levels} actual={actual} disabled={!has} onPick={(q) => (setQuality(q), setFlash((n) => n + 1))} />
           <button className="pl-btn pl-sync" onClick={resync} disabled={!has} title="Догнать остальных" aria-label="Синхронизировать">
             <Icon name="sync" size={18} />
           </button>
@@ -455,6 +507,20 @@ export function Player({ player, serverNow, canControl, send, skip, notify }: Pr
         </div>
       </div>
     </div>
+  );
+}
+
+/** Обложка видео: maxres, а если её нет (YouTube отдаёт заглушку 120×90) — hq */
+function Poster({ id }: { id: string }) {
+  const [hq, setHq] = useState(false);
+  useEffect(() => setHq(false), [id]);
+  return (
+    <img
+      src={`https://i.ytimg.com/vi/${id}/${hq ? 'hqdefault' : 'maxresdefault'}.jpg`}
+      alt=""
+      onLoad={(e) => !hq && e.currentTarget.naturalWidth <= 120 && setHq(true)}
+      onError={() => setHq(true)}
+    />
   );
 }
 

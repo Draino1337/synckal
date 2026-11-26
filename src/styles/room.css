@@ -86,7 +86,13 @@
   overflow: hidden;
   background: #000;
 }
-.pl-yt,
+/* размер и transform задаёт frameGeometry: плеер выше экрана, лишнее с интерфейсом YouTube обрезано */
+.pl-yt {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
 .pl-yt > div,
 .pl-yt iframe {
   position: absolute;
@@ -94,6 +100,52 @@
   width: 100%;
   height: 100%;
   border: 0;
+}
+
+/* своя обложка вместо заставки YouTube */
+.pl-poster {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  background: #000;
+  pointer-events: none;
+  animation: poster-in 0.3s steps(3);
+}
+.pl-poster img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.85) brightness(0.62);
+}
+.pl-poster::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
+}
+.pl-poster-tag {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: var(--ink);
+  font: 700 13px/1 var(--mono);
+  letter-spacing: 0.04em;
+  --rim: var(--a-deep);
+}
+.pl-poster-tag svg {
+  color: var(--a);
+}
+@keyframes poster-in {
+  from {
+    opacity: 0;
+  }
 }
 .pl-shield {
   position: absolute;
@@ -724,4 +776,170 @@ a.pl-btn {
   margin: -4px 0 0;
   color: var(--b-ink);
   font-size: 13px;
+}
+
+/* ───────── качество видео ───────── */
+.pl-q {
+  position: relative;
+}
+.pl-qbtn {
+  gap: 6px;
+  font: 700 12px/1 var(--mono);
+}
+.pl-qbtn svg {
+  transition: transform 0.3s steps(3);
+}
+.pl-qbtn.is-open svg,
+.pl-qbtn:hover:not(:disabled) svg {
+  transform: rotate(90deg);
+}
+.pl-qbtn.is-open {
+  background: var(--soft);
+  color: var(--a-ink);
+}
+/* значок HD/4K: лавандовая плашка с бегущим бликом */
+.pl-qchip {
+  position: relative;
+  overflow: hidden;
+  padding: 2px 4px;
+  background: var(--a);
+  color: var(--bg);
+  font: 800 9.5px/1 var(--mono);
+  letter-spacing: 0.04em;
+}
+.pl-qchip.is-top {
+  background: var(--b);
+}
+.pl-qchip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.75) 45%, transparent 60%) no-repeat;
+  background-size: 250% 100%;
+  animation: shine 4s 1s steps(10) infinite;
+}
+.pl-qmenu {
+  position: absolute;
+  right: -40px;
+  bottom: calc(100% + 10px);
+  z-index: 6;
+  display: grid;
+  min-width: 210px;
+  padding: 8px;
+  background: var(--card);
+  box-shadow:
+    inset 0 0 0 1px var(--line3),
+    0 0 0 3px #000,
+    0 12px 40px rgba(0, 0, 0, 0.6);
+  clip-path: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px));
+  animation: qm-in 0.26s steps(6) both;
+}
+/* раскрывается снизу вверх ступеньками, как пиксельная шторка */
+@keyframes qm-in {
+  from {
+    clip-path: polygon(0 100%, 100% 100%, 100% 100%, 0 100%);
+    transform: translateY(6px);
+  }
+}
+.pl-qhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 8px 8px;
+  border-bottom: 1px dashed var(--line2);
+  margin-bottom: 4px;
+  color: var(--dim);
+  font: 800 11px/1 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.pl-qhead em {
+  color: var(--a-ink);
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.pl-qopt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 600 13.5px/1 var(--mono);
+  text-align: left;
+  animation: qi-in 0.24s calc(var(--i) * 30ms + 60ms) steps(3) both;
+}
+@keyframes qi-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+.pl-qopt:hover {
+  background: var(--soft);
+  color: var(--a-ink);
+}
+.pl-qopt small {
+  margin-left: auto;
+  color: var(--faint);
+  font: 500 11px/1 var(--mono);
+}
+.pl-qopt .pl-qchip {
+  margin-left: auto;
+}
+/* отметка выбора: пустой квадрат, у выбранного — залитый и подмигивает */
+.pl-qdot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  box-shadow: inset 0 0 0 2px var(--line3);
+}
+.pl-qopt.is-on {
+  color: var(--a-ink);
+}
+.pl-qopt.is-on .pl-qdot {
+  background: var(--a);
+  box-shadow: 0 0 0 2px rgba(184, 167, 240, 0.25);
+  animation: blink 1.2s 2 steps(1);
+}
+/* после выбора — крупная надпись в углу видео */
+.pl-qflash {
+  position: absolute;
+  right: 16px;
+  top: 14px;
+  z-index: 3;
+  padding: 8px 12px;
+  background: rgba(10, 10, 12, 0.82);
+  box-shadow: inset 0 0 0 1px var(--a-deep);
+  color: var(--a-ink);
+  font: 400 24px/1 var(--dot);
+  pointer-events: none;
+  animation: qf 1.4s steps(7) both;
+}
+@keyframes qf {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  15%,
+  70% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (max-width: 480px) {
+  .pl-qbtn .pl-qchip,
+  .pl-qval {
+    display: none;
+  }
+  .pl-qmenu {
+    right: -60px;
+  }
 }

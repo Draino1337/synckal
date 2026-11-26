@@ -25,6 +25,9 @@ declare global {
       getVideoLoadedFraction(): number;
       loadModule(name: string): void;
       unloadModule(name: string): void;
+      getPlaybackQuality(): string;
+      getAvailableQualityLevels(): string[];
+      setPlaybackQuality(q: string): void;
       destroy(): void;
     }
     interface PlayerEvent {
