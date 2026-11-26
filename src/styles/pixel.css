@@ -1,0 +1,482 @@
+/* ───────── пиксельный язык сайта ─────────
+   --px — контур со ступенчатыми углами (две ступеньки по --c). Считается на каждом элементе
+   из его собственного --c, поэтому объявлен прямо в правилах, а не один раз на :root. */
+.px,
+.card,
+.btn,
+.chip,
+.hdr-news,
+.hdr-ver {
+  --c: 4px;
+  --px: polygon(
+    0 calc(var(--c) * 2), var(--c) calc(var(--c) * 2), var(--c) var(--c), calc(var(--c) * 2) var(--c), calc(var(--c) * 2) 0,
+    calc(100% - var(--c) * 2) 0, calc(100% - var(--c) * 2) var(--c), calc(100% - var(--c)) var(--c), calc(100% - var(--c)) calc(var(--c) * 2), 100% calc(var(--c) * 2),
+    100% calc(100% - var(--c) * 2), calc(100% - var(--c)) calc(100% - var(--c) * 2), calc(100% - var(--c)) calc(100% - var(--c)), calc(100% - var(--c) * 2) calc(100% - var(--c)), calc(100% - var(--c) * 2) 100%,
+    calc(var(--c) * 2) 100%, calc(var(--c) * 2) calc(100% - var(--c)), var(--c) calc(100% - var(--c)), var(--c) calc(100% - var(--c) * 2), 0 calc(100% - var(--c) * 2)
+  );
+}
+.hdr-ver,
+.chip {
+  --c: 2px;
+}
+.hdr-news {
+  --c: 3px;
+}
+
+/* Панель: рамка (::before) и заливка с зерном (::after) обрезаны по контуру, сам элемент — нет,
+   поэтому выпадающие списки и подсказки внутри панели не срезаются. */
+.px,
+.card,
+.btn-ghost,
+.chip,
+.hdr-news,
+.hdr-ver {
+  position: relative;
+  isolation: isolate;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.px::before,
+.card::before,
+.btn-ghost::before,
+.chip::before,
+.hdr-news::before,
+.hdr-ver::before,
+.px::after,
+.card::after,
+.btn-ghost::after,
+.chip::after,
+.hdr-news::after,
+.hdr-ver::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  clip-path: var(--px);
+}
+.px::before,
+.card::before,
+.btn-ghost::before,
+.chip::before,
+.hdr-news::before,
+.hdr-ver::before {
+  inset: 0;
+  z-index: -2;
+  background: var(--rim, var(--line2));
+  transition: background-color 0.15s;
+}
+.px::after,
+.card::after,
+.btn-ghost::after,
+.chip::after,
+.hdr-news::after,
+.hdr-ver::after {
+  inset: 1px;
+  z-index: -1;
+  background: var(--tex, none) 0 0 / 96px 96px, var(--fill, var(--card));
+  image-rendering: pixelated;
+}
+/* приподнятая панель — светлее и с более заметной рамкой */
+.px-raised {
+  --fill: var(--surf2);
+  --rim: #3d3c45;
+}
+.px-well {
+  --fill: var(--well);
+  --rim: var(--line);
+}
+/* рамка светлеет под курсором */
+.hov:hover,
+.card.hov:hover,
+.btn-ghost:hover,
+.hdr-news:hover {
+  --rim: var(--line3);
+}
+
+/* ───────── дизерный текст: буквы набраны из квадратиков ───────── */
+.dither {
+  --d: 4px; /* шаг сетки */
+  --s: 3px; /* сторона квадратика */
+  color: var(--a);
+  -webkit-mask-image: linear-gradient(90deg, #000 var(--s), transparent 0), linear-gradient(#000 var(--s), transparent 0);
+  mask-image: linear-gradient(90deg, #000 var(--s), transparent 0), linear-gradient(#000 var(--s), transparent 0);
+  -webkit-mask-size: var(--d) var(--d);
+  mask-size: var(--d) var(--d);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+.dither-sm {
+  --d: 2px;
+  --s: 1.5px;
+}
+
+/* ───────── подпись раздела: квадратик и моноширинные капслоком ───────── */
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--dim);
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.label::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--a);
+}
+
+/* ───────── чип ───────── */
+.chip {
+  --fill: var(--a-f);
+  --rim: var(--a-deep);
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  color: var(--a-ink);
+  font: 700 10.5px/1 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ───────── мозаичное появление ─────────
+   Элемент с .rv проявляется квадратиками 4×4 px и чуть всплывает снизу. Маски --mz1…--mz7 (каждая
+   следующая плотнее) генерирует lib/pixel.ts; атрибут data-in ставит наблюдатель, когда элемент попал в окно.
+   Элементы, попавшие в окно одновременно, получают нарастающую задержку --rv-delay — выходят каскадом. */
+.rv {
+  opacity: 0;
+}
+.rv[data-in] {
+  opacity: 1;
+  -webkit-mask-size: 64px 64px;
+  mask-size: 64px 64px;
+  animation:
+    mz-in 0.42s linear both,
+    rv-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--rv-delay, 0s);
+}
+@keyframes mz-in {
+  0% {
+    -webkit-mask-image: var(--mz1);
+    mask-image: var(--mz1);
+  }
+  14.29% {
+    -webkit-mask-image: var(--mz2);
+    mask-image: var(--mz2);
+  }
+  28.57% {
+    -webkit-mask-image: var(--mz3);
+    mask-image: var(--mz3);
+  }
+  42.86% {
+    -webkit-mask-image: var(--mz4);
+    mask-image: var(--mz4);
+  }
+  57.14% {
+    -webkit-mask-image: var(--mz5);
+    mask-image: var(--mz5);
+  }
+  71.43% {
+    -webkit-mask-image: var(--mz6);
+    mask-image: var(--mz6);
+  }
+  85.71% {
+    -webkit-mask-image: var(--mz7);
+    mask-image: var(--mz7);
+  }
+  100% {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+@keyframes rv-rise {
+  from {
+    transform: translateY(12px);
+  }
+}
+/* моргающий курсор-квадрат */
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes bob {
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+/* ───────── буквы, курсор, блик ───────── */
+/* буква «перещёлкивается» на место: падает сверху, чуть проскакивает и встаёт */
+.fl {
+  display: inline-block;
+  animation: flip-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes flip-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-0.4em);
+  }
+  45% {
+    opacity: 0.6;
+    transform: translateY(0.07em);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* пиксельный курсор после заголовка */
+.caret {
+  display: inline-block;
+  width: 0.42em;
+  height: 0.72em;
+  margin-left: 0.1em;
+  background: currentColor;
+  vertical-align: baseline;
+  animation: blink 1.05s steps(1) 0.6s infinite both;
+}
+
+/* ───────── глитч слова: раз в несколько секунд текст рвётся на полосы и двоится янтарным и голубым ─────────
+   Копии слова — ::before и ::after из data-text; они внутри .dither, поэтому тоже набраны квадратиками.
+   Под курсором глитч идёт непрерывно и сильнее. */
+.glitch {
+  position: relative;
+  display: inline-block;
+  cursor: default;
+}
+.glitch > span[aria-hidden] {
+  display: inline-block;
+  animation: gl-main 4.2s steps(1) 1.6s infinite;
+}
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.glitch::before {
+  color: var(--b);
+  animation: gl-a 4.2s steps(1) 1.6s infinite;
+}
+.glitch::after {
+  color: #6fd8f2;
+  animation: gl-b 4.2s steps(1) 1.6s infinite;
+}
+.glitch:hover > span[aria-hidden] {
+  animation: gh-main 0.36s steps(1) infinite;
+}
+.glitch:hover::before {
+  animation: gh-a 0.36s steps(1) infinite;
+}
+.glitch:hover::after {
+  animation: gh-b 0.42s steps(1) infinite;
+}
+@keyframes gh-main {
+  0% { transform: translateX(-3px); clip-path: inset(0 0 55% 0); }
+  25% { transform: translateX(4px) skewX(-7deg); clip-path: none; }
+  50% { transform: translateX(-2px); clip-path: inset(35% 0 0 0); }
+  75% { transform: translateX(2px) skewX(5deg); clip-path: none; }
+}
+@keyframes gh-a {
+  0% { opacity: 1; clip-path: inset(5% 0 65% 0); transform: translateX(-8px); }
+  25% { opacity: 1; clip-path: inset(52% 0 24% 0); transform: translateX(7px); }
+  50% { opacity: 1; clip-path: inset(74% 0 4% 0); transform: translateX(-5px); }
+  75% { opacity: 1; clip-path: inset(25% 0 50% 0); transform: translateX(10px); }
+}
+@keyframes gh-b {
+  0% { opacity: 1; clip-path: inset(62% 0 10% 0); transform: translateX(9px); }
+  25% { opacity: 1; clip-path: inset(12% 0 72% 0); transform: translateX(-7px); }
+  50% { opacity: 1; clip-path: inset(40% 0 36% 0); transform: translateX(6px); }
+  75% { opacity: 1; clip-path: inset(84% 0 0 0); transform: translateX(-10px); }
+}
+@keyframes gl-main {
+  0%, 88%, 100% {
+    transform: none;
+    clip-path: none;
+  }
+  90% {
+    transform: translateX(3px) skewX(-6deg);
+    clip-path: inset(0 0 40% 0);
+  }
+  92% {
+    transform: translateX(-4px);
+    clip-path: inset(30% 0 0 0);
+  }
+  94% {
+    transform: translateX(2px) skewX(8deg);
+    clip-path: none;
+  }
+  96% {
+    transform: translateX(-1px);
+  }
+  98% {
+    transform: none;
+  }
+}
+@keyframes gl-a {
+  0%, 88%, 100% {
+    opacity: 0;
+    transform: none;
+  }
+  89% {
+    opacity: 1;
+    clip-path: inset(8% 0 62% 0);
+    transform: translateX(-7px);
+  }
+  91% {
+    clip-path: inset(48% 0 28% 0);
+    transform: translateX(6px);
+  }
+  93% {
+    clip-path: inset(70% 0 6% 0);
+    transform: translateX(-4px);
+  }
+  95% {
+    clip-path: inset(22% 0 55% 0);
+    transform: translateX(9px);
+  }
+  97% {
+    opacity: 0;
+  }
+}
+@keyframes gl-b {
+  0%, 89%, 100% {
+    opacity: 0;
+    transform: none;
+  }
+  90% {
+    opacity: 1;
+    clip-path: inset(60% 0 12% 0);
+    transform: translateX(8px);
+  }
+  92% {
+    clip-path: inset(15% 0 70% 0);
+    transform: translateX(-6px);
+  }
+  94% {
+    clip-path: inset(38% 0 38% 0);
+    transform: translateX(5px);
+  }
+  96% {
+    clip-path: inset(80% 0 2% 0);
+    transform: translateX(-9px);
+  }
+  98% {
+    opacity: 0;
+  }
+}
+
+/* смена раздела сайта: страница мягко всплывает */
+.page {
+  animation: page-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* после заставки с Сатурном: шапка спускается сверху, первая страница проявляется мозаикой вслед за ней */
+.hdr {
+  -webkit-mask-size: 64px 64px;
+  mask-size: 64px 64px;
+  animation:
+    mz-in 0.42s linear both,
+    hdr-drop 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes hdr-drop {
+  from {
+    transform: translateY(-100%);
+  }
+}
+.page.intro-in {
+  -webkit-mask-size: 64px 64px;
+  mask-size: 64px 64px;
+  animation:
+    mz-in 0.5s linear 0.18s both,
+    rv-rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both;
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* лёгкий отклик на наведение — сдвиг на пару пикселей, ступенькой */
+.cl-phones button,
+.rivals-col a {
+  transition: transform 0.16s steps(2), border-color 0.15s, background-color 0.15s;
+}
+.cl-phones button:hover {
+  transform: translateY(-2px);
+}
+.rt-row,
+.rivals-col a {
+  transition: transform 0.16s steps(2), border-color 0.15s, background-color 0.15s;
+}
+.rt-row:hover,
+.rivals-col a:hover {
+  transform: translateX(4px);
+}
+
+/* ASCII-Сатурн поверх звёзд, под содержимым; приглушён, чтобы текст страницы читался */
+.saturn {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+/* текст прямо на фоне, поверх Сатурна: не серо-лавандовый, как символы планеты, а почти белый —
+   отличается от них и цветом, и яркостью. Основной текст — как заголовки, мелкие подписи — чуть темнее */
+.lead,
+.rt-lead,
+.cl-sub,
+.lost p {
+  color: var(--ink);
+}
+.label,
+.hero-stat small,
+.hero-src,
+.pod-meta,
+.rt-note,
+.ftr {
+  color: var(--sky);
+}
+.ftr a {
+  color: var(--ink);
+}
+
+/* звёздное небо за всем сайтом */
+.stars {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  image-rendering: pixelated; /* холст в css-пикселях: на ретине квадраты увеличиваются чётко */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rv,
+  .rv[data-in] {
+    opacity: 1;
+    animation: none;
+  }
+  .fl,
+  .page,
+  .page.intro-in,
+  .hdr,
+  .caret,
+  .glitch > span[aria-hidden],
+  .glitch::before,
+  .glitch::after {
+    animation: none;
+  }
+}
