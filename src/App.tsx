@@ -42,7 +42,7 @@ export default function App() {
         <>
           <header className="hdr">
             <div className="hdr-in">
-              <a href="/" onClick={link} className="logo" aria-label="synckal — на главную">
+              <a href="/" onClick={(e) => (location.pathname === "/" ? (e.preventDefault(), window.scrollTo({ top: 0, behavior: "smooth" })) : link(e))} className="logo" aria-label="synckal — на главную">
                 <AsciiLogo />
                 <b className="logo-txt">
                   sync<span>kal</span>

@@ -52,6 +52,11 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
   const [scrub, setScrub] = useState<number | null>(null);
   const seekEl = useRef<HTMLDivElement>(null);
   const [hoverX, setHoverX] = useState<number | null>(null); // где мышь над дорожкой (px от левого края)
+  // тянем ли ползунок: отпустить мышь можно где угодно (под дорожкой, на кнопках) — ловим это на всём окне,
+  // иначе «перетаскивание» зависало и превью застревало на текущей позиции
+  const [dragging, setDragging] = useState(false);
+  const scrubRef = useRef<number | null>(null);
+  scrubRef.current = scrub;
   const [vol, setVol] = useState(() => Number(store.get('vol') ?? 80));
   const [muted, setMuted] = useState(() => store.get('muted') === '1');
   const [full, setFull] = useState(false);
@@ -367,6 +372,25 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
 
   const ytHref = player.videoId ? `https://www.youtube.com/watch?v=${player.videoId}&t=${Math.floor(cur)}s` : undefined;
   const shown = scrub ?? cur;
+  const commitScrub = () => {
+    const v = scrubRef.current;
+    scrubRef.current = null;
+    setScrub(null);
+    setDragging(false);
+    if (v !== null) seekTo(v);
+  };
+  const commitRef = useRef(commitScrub);
+  commitRef.current = commitScrub;
+  useEffect(() => {
+    if (!dragging) return;
+    const up = () => commitRef.current();
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    return () => {
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+  }, [dragging]);
   const pct = dur ? (shown / dur) * 100 : 0;
   const has = !!player.videoId;
   const geo = frameGeometry(size, quality);
@@ -429,8 +453,8 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
           onPointerLeave={() => setHoverX(null)}
         >
           {has && dur > 0 && info?.chapters.map((c) => c.t > 0 && c.t < dur && <i key={c.t} className="pl-chap" style={{ left: `${(c.t / dur) * 100}%` }} />)}
-          {has && dur > 0 && (hoverX !== null || scrub !== null) && (
-            <SeekPreview width={seekEl.current?.clientWidth ?? 0} x={hoverX} t={scrub} dur={dur} info={info} />
+          {has && dur > 0 && (hoverX !== null || dragging) && (
+            <SeekPreview width={seekEl.current?.clientWidth ?? 0} x={hoverX} t={dragging ? scrub : null} dur={dur} info={info} />
           )}
           <input
             type="range"
@@ -440,15 +464,13 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
             value={Math.min(shown, dur || 1)}
             disabled={!has || !canControl}
             aria-label="Перемотка"
-            onChange={(e) => setScrub(Number(e.target.value))}
-            onPointerUp={() => {
-              if (scrub !== null) seekTo(scrub);
-              setScrub(null);
+            onPointerDown={() => setDragging(true)}
+            onChange={(e) => {
+              scrubRef.current = Number(e.target.value);
+              setScrub(scrubRef.current);
             }}
-            onKeyUp={() => {
-              if (scrub !== null) seekTo(scrub);
-              setScrub(null);
-            }}
+            onKeyUp={() => scrubRef.current !== null && commitScrub()}
+            onBlur={() => !dragging && scrubRef.current !== null && commitScrub()}
           />
         </div>
         <div className="pl-row">
