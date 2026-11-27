@@ -19,8 +19,12 @@ interface Props {
 }
 
 const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-const DRIFT_PLAYING = 1; // с — больше этого отставания при воспроизведении подматываем
-const DRIFT_PAUSED = 0.4;
+// Рассинхрон при воспроизведении (getCurrentTime точен до ~0,04 с):
+const DRIFT_OK = 0.05; // с — ближе этого считаем, что идём вровень
+const DRIFT_NUDGE = 0.1; // дальше — догоняем, чуть меняя скорость (YouTube принимает шаг 0,05)
+const DRIFT_SEEK = 3; // дальше — перематываем: скоростью догонять слишком долго
+const DRIFT_HARD = 0.5; // после действия в комнате (пауза, перемотка) перематываем уже с этого
+const DRIFT_PAUSED = 0.15; // на паузе перемотка ничего не стоит — выравниваем точнее
 
 /**
  * Плеер YouTube без родных кнопок: управление своё, чтобы любое действие уходило на сервер
@@ -33,14 +37,22 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
   const screen = useRef<HTMLDivElement>(null);
   const yt = useRef<YT.Player | null>(null);
   const [ready, setReady] = useState(false);
+  // своё действие (пауза, перемотка) применяем сразу, не дожидаясь сервера. Ответ сервера приходит
+  // с новым rev и заменяет догадку; не пришёл за 3 с — откатываемся к тому, что знаем
+  const optimistic = useRef<{ base: number; until: number; s: PlayerState } | null>(null);
+  const o = optimistic.current;
   const P = useRef(player);
-  P.current = player;
+  P.current = o && o.base === player.rev && Date.now() < o.until ? o.s : player;
   const sendRef = useRef(send);
   sendRef.current = send;
 
   const loaded = useRef<string | null>(null); // какое видео сейчас в плеере
   const cuedAt = useRef(0); // с какой секунды «заряжено» видео на паузе
   const lastSeek = useRef(0);
+  const forceSeek = useRef(false); // что-то поменялось в комнате — расхождение исправляем перемоткой, а не скоростью
+  const seekLead = useRef(0.3); // с — на сколько перематывать вперёд: пока видео догружается, остальные уходят дальше
+  const measureLead = useRef(false);
+  const nudging = useRef(false);
   const endedRev = useRef(-1);
   const playSince = useRef(0); // когда начали безуспешно запускать воспроизведение
   const errorRef = useRef<number | null>(null);
@@ -191,10 +203,12 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
     }
     if (errorRef.current !== null) return;
 
-    if (Math.abs(p.getPlaybackRate() - s.rate) > 0.01) p.setPlaybackRate(s.rate);
+    const setRate = (r: number) => Math.abs(p.getPlaybackRate() - r) > 0.01 && p.setPlaybackRate(r);
     const st = p.getPlayerState();
     const t = p.getCurrentTime();
     const d = p.getDuration();
+    const hard = forceSeek.current;
+    forceSeek.current = false;
 
     if (s.playing) {
       // время ролика вышло, а «ended» не пришёл (вкладка была в фоне) — сообщаем сами
@@ -215,12 +229,33 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
           setBlocked(true);
         }
       } else playSince.current = 0;
-      if (Math.abs(t - want) > DRIFT_PLAYING && Date.now() - lastSeek.current > 2000) {
-        p.seekTo(want, true);
-        lastSeek.current = Date.now();
+      const diff = want - t; // > 0 — отстаём
+      // первый кадр после перемотки показывает, хватило ли упреждения: поправляем его на будущее
+      if (measureLead.current && st === S.PLAYING && Date.now() - lastSeek.current > 500) {
+        measureLead.current = false;
+        seekLead.current = Math.min(2, Math.max(0, seekLead.current + diff));
       }
+      const gap = Date.now() - lastSeek.current;
+      if (Math.abs(diff) > (hard ? DRIFT_HARD : DRIFT_SEEK) && (hard || gap > (st === S.BUFFERING ? 6000 : 2000))) {
+        p.seekTo(want + seekLead.current * s.rate, true);
+        lastSeek.current = Date.now();
+        measureLead.current = true;
+        nudging.current = false;
+        setRate(s.rate);
+        return;
+      }
+      // небольшое расхождение догоняем скоростью: без скачка и догрузки, на слух незаметно
+      let rate = s.rate;
+      if (st === S.PLAYING && (Math.abs(diff) > DRIFT_NUDGE || (nudging.current && Math.abs(diff) > DRIFT_OK))) {
+        const k = Math.abs(diff) > 0.6 ? 0.1 : 0.05;
+        rate = Math.min(2, Math.max(0.25, Math.round(s.rate * (1 + Math.sign(diff) * k) * 20) / 20));
+      }
+      nudging.current = rate !== s.rate;
+      setRate(rate);
     } else {
       playSince.current = 0;
+      nudging.current = false;
+      setRate(s.rate);
       if (st === S.CUED || st === S.UNSTARTED) {
         // на «заряженном» видео seekTo запустил бы воспроизведение — перезаряжаем с нужной секунды
         if (Math.abs(cuedAt.current - want) > DRIFT_PAUSED) {
@@ -230,7 +265,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
         return;
       }
       if (st === S.PLAYING || st === S.BUFFERING) p.pauseVideo();
-      if (Math.abs(t - want) > DRIFT_PAUSED && Date.now() - lastSeek.current > 600) {
+      if (Math.abs(t - want) > DRIFT_PAUSED && (hard || Date.now() - lastSeek.current > 600)) {
         p.seekTo(want, true);
         lastSeek.current = Date.now();
       }
@@ -239,7 +274,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
 
   // изменение в комнате — сверяемся сразу, не дожидаясь тика
   useEffect(() => {
-    lastSeek.current = 0;
+    forceSeek.current = true;
     sync();
   }, [player.rev, player.videoId, sync]);
 
@@ -309,13 +344,27 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
     if (!canControl) notify('Управлять плеером может только ведущий или модератор');
     return canControl && !!P.current.videoId;
   };
+  /** отправляет действие на сервер и сразу применяет его у себя */
+  const act = (msg: Record<string, unknown>, patch: Partial<PlayerState>) => {
+    const s = P.current;
+    const now = serverNow();
+    const next = { ...s, pos: expectedPos(s, now), ...patch, at: now };
+    optimistic.current = { base: player.rev, until: Date.now() + 3000, s: next };
+    P.current = next;
+    send(msg);
+    forceSeek.current = true;
+    sync();
+  };
   const toggle = () => {
     if (!guard()) return;
-    send({ t: P.current.playing ? 'pause' : 'play', pos: localPos() });
+    const pos = localPos();
+    const playing = !P.current.playing;
+    act({ t: playing ? 'play' : 'pause', pos }, { playing, pos });
   };
-  const seekTo = (pos: number) => {
+  const seekTo = (to: number) => {
     if (!guard()) return;
-    send({ t: 'seek', pos: Math.max(0, Math.min(pos, dur || pos)) });
+    const pos = Math.max(0, Math.min(to, dur || to));
+    act({ t: 'seek', pos }, { pos });
   };
   const toggleFull = () => {
     if (document.fullscreenElement) document.exitFullscreen();
@@ -333,9 +382,8 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
     } else setMuted((m) => !m);
   };
   const resync = () => {
-    lastSeek.current = 0;
-    const p = yt.current;
-    if (p && P.current.videoId) p.seekTo(expectedPos(P.current, serverNow()), true);
+    forceSeek.current = true;
+    sync();
   };
 
   // горячие клавиши, когда фокус не в поле ввода
