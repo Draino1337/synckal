@@ -54,6 +54,24 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
   const seekLead = useRef(0.3); // с — на сколько перематывать вперёд: пока видео догружается, остальные уходят дальше
   const measureLead = useRef(false);
   const nudging = useRef(false);
+  // Куда последний раз перематывали. Пока YouTube догружает это место, getCurrentTime() бывает,
+  // что ещё отдаёт старое время — ползунок стоял бы там, хотя видео уже в новой точке.
+  const seekTarget = useRef<{ from: number; to: number; at: number } | null>(null);
+  const seekP = (p: YT.Player, to: number) => {
+    const from = p.getCurrentTime();
+    p.seekTo(to, true);
+    seekTarget.current = { from, to, at: Date.now() };
+  };
+  /** время плеера; сразу после перемотки, пока он не дошёл до новой точки, — сама точка */
+  const playerTime = (p: YT.Player) => {
+    const t = p.getCurrentTime();
+    const g = seekTarget.current;
+    // «старое» время — то, что ближе к месту, откуда уходили (оно тоже успело уйти вперёд), чем к новой точке
+    const old = g && g.from + (Date.now() - g.at) / 1000;
+    if (g && old !== null && Math.abs(t - g.to) > 1.5 && Math.abs(t - old) < Math.abs(t - g.to) && Date.now() - g.at < 10_000) return g.to;
+    seekTarget.current = null;
+    return t;
+  };
   const endedRev = useRef(-1);
   const playSince = useRef(0); // когда начали безуспешно запускать воспроизведение
   const errorRef = useRef<number | null>(null);
@@ -206,7 +224,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
 
     const setRate = (r: number) => Math.abs(p.getPlaybackRate() - r) > 0.01 && p.setPlaybackRate(r);
     const st = p.getPlayerState();
-    const t = p.getCurrentTime();
+    const t = playerTime(p);
     const d = p.getDuration();
     const hard = forceSeek.current;
     forceSeek.current = false;
@@ -235,13 +253,6 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
       // Расхождение считаем по времени «без рекламы», иначе плеер, уже перескочивший вставку,
       // считался бы убежавшим вперёд и его вернули бы обратно в рекламу.
       const ads = adsRef.current.filter(([a, b]) => a > s.pos - 1 && b > s.pos + 0.5);
-      const ad = st === S.PLAYING && ads.find(([a, b]) => t >= a && t < b - 0.5);
-      if (ad) {
-        p.seekTo(ad[1], true);
-        lastSeek.current = Date.now();
-        measureLead.current = false;
-        return;
-      }
       const noAds = (x: number) => {
         let cut = 0;
         for (const [a, b] of ads) {
@@ -263,11 +274,20 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
       }
       const gap = Date.now() - lastSeek.current;
       if (Math.abs(diff) > (hard ? DRIFT_HARD : DRIFT_SEEK) && (hard || gap > (st === S.BUFFERING ? 6000 : 2000))) {
-        p.seekTo(withAds(noAds(want) + seekLead.current * s.rate), true);
+        seekP(p, withAds(noAds(want) + seekLead.current * s.rate));
         lastSeek.current = Date.now();
         measureLead.current = true;
         nudging.current = false;
         setRate(s.rate);
+        return;
+      }
+      // вставку проверяем после перемотки комнаты: если комнату только что перемотали,
+      // сначала идём за ней, а не перескакиваем рекламу там, где плеер был до этого
+      const ad = st === S.PLAYING && ads.find(([a, b]) => t >= a && t < b - 0.5);
+      if (ad) {
+        seekP(p, ad[1]);
+        lastSeek.current = Date.now();
+        measureLead.current = false;
         return;
       }
       // небольшое расхождение догоняем скоростью: без скачка и догрузки, на слух незаметно
@@ -292,7 +312,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
       }
       if (st === S.PLAYING || st === S.BUFFERING) p.pauseVideo();
       if (Math.abs(t - want) > DRIFT_PAUSED && (hard || Date.now() - lastSeek.current > 600)) {
-        p.seekTo(want, true);
+        seekP(p, want);
         lastSeek.current = Date.now();
       }
     }
@@ -317,7 +337,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
       const s = P.current;
       const st = p.getPlayerState();
       const cued = st === S.CUED || st === S.UNSTARTED;
-      setCur(cued ? expectedPos(s, serverNow()) : p.getCurrentTime());
+      setCur(cued ? expectedPos(s, serverNow()) : playerTime(p));
       setDur(p.getDuration() || 0);
       setBuf(p.getVideoLoadedFraction() || 0);
       setWaiting(s.playing && st === S.BUFFERING);
@@ -364,7 +384,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
   const localPos = () => {
     const p = yt.current;
     const st = p?.getPlayerState();
-    return p && st !== S.CUED && st !== S.UNSTARTED ? p.getCurrentTime() : expectedPos(P.current, serverNow());
+    return p && st !== S.CUED && st !== S.UNSTARTED ? playerTime(p) : expectedPos(P.current, serverNow());
   };
   const guard = () => {
     if (!canControl) notify('Управлять плеером может только ведущий или модератор');
