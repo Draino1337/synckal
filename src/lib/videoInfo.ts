@@ -12,6 +12,7 @@ export interface Storyboard {
 export interface VideoInfo {
   storyboard: Storyboard | null;
   chapters: { t: number; title: string }[];
+  sponsor?: [number, number][]; // рекламные вставки (SponsorBlock), с; сервер их пропускает
   likes: number | null;
   dislikes: number | null;
   views: number | null;

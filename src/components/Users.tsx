@@ -106,6 +106,11 @@ export function Users({ room, you, myRole, send, onRename, onInvite, copied }: P
             <i />
             Показывать комнату на главной
           </label>
+          <label className="tgl" title="Вставки берутся из базы SponsorBlock: спонсоры, самореклама, просьбы подписаться">
+            <input type="checkbox" checked={room.settings.sponsor} onChange={(e) => send({ t: 'settings', sponsor: e.target.checked })} />
+            <i />
+            Пропускать рекламу в роликах
+          </label>
           <form
             className="set-title"
             onSubmit={(e) => {

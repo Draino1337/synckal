@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRoom } from '../lib/room.ts';
-import { randomName, store } from '../lib/util.ts';
+import { findYoutube, randomName, store } from '../lib/util.ts';
 import { link } from '../router.ts';
 import { Player } from '../components/Player.tsx';
 import { Queue, QueueAdd } from '../components/Queue.tsx';
@@ -10,7 +10,6 @@ import { Users } from '../components/Users.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { useVideoInfo } from '../lib/videoInfo.ts';
 import { Votes } from '../components/Votes.tsx';
-import { ReactBar } from '../components/Reactions.tsx';
 
 function NameModal({ initial, onDone, onCancel }: { initial: string; onDone: (n: string) => void; onCancel?: () => void }) {
   const [name, setName] = useState(initial);
@@ -51,7 +50,7 @@ export function Room({ id }: { id: string }) {
   const [name, setName] = useState<string | null>(() => store.get('name'));
   const [renaming, setRenaming] = useState(false);
   const [copied, setCopied] = useState(false);
-  const { status, room, chat, you, send, serverNow, toast, notify, reacts } = useRoom(id, name);
+  const { status, room, chat, you, send, serverNow, toast, notify } = useRoom(id, name);
   const info = useVideoInfo(room?.player.videoId ?? null);
   const [toastOn, setToastOn] = useState(false);
   // чат и очередь — вкладки одной панели; пока открыта очередь, считаем непрочитанные сообщения
@@ -70,6 +69,23 @@ export function Room({ id }: { id: string }) {
     return () => document.removeEventListener('visibilitychange', on);
   }, [serverNow]);
   const missed = awayAt === null ? 0 : chat.filter((m) => !m.sys && m.ts > awayAt).length;
+
+  // Ctrl+V со ссылкой YouTube где угодно, кроме полей ввода: ничего не играет — включаем, иначе в очередь
+  // (так сервер и поступает с «add» без режима)
+  const playing = !!room?.player.videoId;
+  useEffect(() => {
+    const on = (e: ClipboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable) return;
+      const url = findYoutube(e.clipboardData?.getData('text') ?? '');
+      if (!url) return;
+      e.preventDefault();
+      send({ t: 'add', url });
+      notify(playing ? 'Добавляю в очередь…' : 'Включаю видео…');
+    };
+    document.addEventListener('paste', on);
+    return () => document.removeEventListener('paste', on);
+  }, [send, notify, playing]);
 
   useEffect(() => {
     if (!toast) return;
@@ -160,7 +176,7 @@ export function Room({ id }: { id: string }) {
           <div className="room-play">
             <QueueAdd canControl={canControl} send={send} />
             <div className="room-stage">
-              <Player player={room.player} serverNow={serverNow} canControl={canControl} send={send} skip={room.skip} notify={notify} info={info} reacts={reacts} />
+              <Player player={room.player} serverNow={serverNow} canControl={canControl} send={send} skip={room.skip} notify={notify} info={info} sponsor={room.settings.sponsor} />
               {status === 'reconnecting' && <span className="room-warn px px-raised">Связь потеряна, переподключаемся…</span>}
             </div>
             <div className="now">
@@ -171,10 +187,7 @@ export function Room({ id }: { id: string }) {
                   </h2>
                   <div className="now-meta">
                     {room.player.author && <small>{room.player.author}</small>}
-                    <div className="now-acts">
-                      <Votes info={info} />
-                      <ReactBar send={send} />
-                    </div>
+                    <Votes info={info} />
                   </div>
                 </>
               ) : (

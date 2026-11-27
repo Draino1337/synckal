@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { expectedPos, type PlayerState, type Reaction } from '../lib/room.ts';
+import { expectedPos, type PlayerState } from '../lib/room.ts';
 import { loadYT, S, YT_ERRORS } from '../lib/youtube.ts';
 import { fmtTime, store } from '../lib/util.ts';
 import { Icon } from './Icon.tsx';
 import { storyFrame, type VideoInfo } from '../lib/videoInfo.ts';
-import { ReactLayer } from './Reactions.tsx';
 import { QualityMenu, frameGeometry, qLabel, type Quality } from './Quality.tsx';
 
 interface Props {
@@ -15,7 +14,7 @@ interface Props {
   skip: { votes: number; need: number };
   notify: (text: string) => void;
   info: VideoInfo | null;
-  reacts: Reaction[];
+  sponsor: boolean; // комната пропускает рекламу — показываем вставки на дорожке
 }
 
 const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -31,7 +30,7 @@ const DRIFT_PAUSED = 0.15; // на паузе перемотка ничего н
  * и не путалось с подстройкой. Раз в 250 мс сверяем плеер с состоянием комнаты:
  * то ли видео, играет/пауза, скорость, позиция (с поправкой на серверные часы).
  */
-export function Player({ player, serverNow, canControl, send, skip, notify, info, reacts }: Props) {
+export function Player({ player, serverNow, canControl, send, skip, notify, info, sponsor }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLDivElement>(null);
@@ -466,7 +465,6 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
         )}
         {/* перехватываем клики по видео: управление только через наши кнопки */}
         <div className="pl-shield" onClick={shieldClick} onDoubleClick={shieldDouble} />
-        <ReactLayer reacts={reacts} />
         {!has && (
           <div className="pl-empty">
             <pre className="pl-tv" aria-hidden="true">{TV}</pre>
@@ -503,6 +501,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
           onPointerMove={(e) => setHoverX(e.clientX - e.currentTarget.getBoundingClientRect().left)}
           onPointerLeave={() => setHoverX(null)}
         >
+          {has && dur > 0 && sponsor && info?.sponsor?.map(([a, b]) => <i key={a} className="pl-sb" style={{ left: `${(a / dur) * 100}%`, width: `${((Math.min(b, dur) - a) / dur) * 100}%` }} />)}
           {has && dur > 0 && info?.chapters.map((c) => c.t > 0 && c.t < dur && <i key={c.t} className="pl-chap" style={{ left: `${(c.t / dur) * 100}%` }} />)}
           {has && dur > 0 && (hoverX !== null || dragging) && (
             <SeekPreview width={seekEl.current?.clientWidth ?? 0} x={hoverX} t={dragging ? scrub : null} dur={dur} info={info} />

@@ -13,7 +13,6 @@ const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist
 const ROOM_TTL = 10 * 60_000; // пустая комната живёт 10 минут
 const CHAT_KEEP = 150;
 const QUEUE_MAX = 300;
-const REACTIONS = ['<3', ':D', 'o_O', '!?', '+1', ':('];
 const COLORS = ['#b8a7f0', '#e0b64a', '#6fd8f2', '#3fb950', '#f27aa6', '#f2994a', '#9fe870', '#7aa2f7', '#e879f9', '#f24d5c'];
 
 /** @type {Map<string, Room>} */
@@ -144,13 +143,34 @@ async function votes(id) {
   return { likes: num(j.likes, null), dislikes: num(j.dislikes, null), views: num(j.viewCount, null) };
 }
 
+const SB_CATS = encodeURIComponent(JSON.stringify(['sponsor', 'selfpromo', 'interaction']));
+/** рекламные вставки из SponsorBlock: [[начало, конец], …] в секундах, пересекающиеся слиты */
+async function sponsorSegments(id) {
+  const r = await fetch(`https://sponsor.ajay.app/api/skipSegments?videoID=${id}&categories=${SB_CATS}`, { signal: AbortSignal.timeout(6000) });
+  if (r.status === 404) return []; // так SponsorBlock отвечает, когда отрезков нет
+  if (!r.ok) throw new Error('sponsorblock ' + r.status);
+  const segs = (await r.json())
+    .filter((s) => s.actionType === 'skip' && Array.isArray(s.segment))
+    .map((s) => [num(s.segment[0], 0), num(s.segment[1], 0)])
+    .filter(([a, b]) => b - a >= 1)
+    .sort((x, y) => x[0] - y[0]);
+  const out = [];
+  for (const [a, b] of segs) {
+    const last = out.at(-1);
+    if (last && a <= last[1] + 0.5) last[1] = Math.max(last[1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+
 async function videoInfo(id) {
   const c = infoCache.get(id);
   if (c && now() - c.at < INFO_TTL) return c.data;
-  const [page, v] = await Promise.allSettled([watchPage(id), votes(id)]);
+  const [page, v, sb] = await Promise.allSettled([watchPage(id), votes(id), sponsorSegments(id)]);
   const data = {
     storyboard: page.status === 'fulfilled' ? page.value.storyboard : null,
     chapters: page.status === 'fulfilled' ? page.value.chapters : [],
+    sponsor: sb.status === 'fulfilled' ? sb.value : [],
     ...(v.status === 'fulfilled' ? v.value : { likes: null, dislikes: null, views: null }),
   };
   infoCache.set(id, { at: now(), data });
@@ -169,7 +189,10 @@ class Room {
     this.mods = new Set(); // cid модераторов
     this.banned = new Set(); // cid выгнанных: обратно не пускаем
     this.joinOrder = new Map(); // cid → когда впервые зашёл (для передачи короны)
-    this.settings = { open: true, listed: true, title: '' }; // listed — видна в списке на главной
+    // listed — видна в списке на главной; sponsor — пропускать рекламные вставки (SponsorBlock)
+    this.settings = { open: true, listed: true, title: '', sponsor: true };
+    this.sponsor = null; // { id, segs } — вставки текущего видео, segs = null, пока грузятся
+    this.sbTimer = 0;
     this.player = { videoId: null, title: '', author: '', playing: false, pos: 0, at: now(), rate: 1, rev: 0, item: null };
     this.queue = [];
     this.chat = [];
@@ -263,6 +286,39 @@ class Room {
   }
   sync() {
     this.broadcast({ t: 'room', room: this.snapshot(), now: now() });
+    this.armSponsor();
+  }
+  /**
+   * Пропуск рекламы у всех сразу: сервер знает позицию по своим часам, поэтому сам ставит таймер
+   * на начало ближайшей вставки и перематывает комнату. Если в вставку перемотали вручную
+   * (и уже смотрят дольше секунды) — её не трогаем, ждём следующую.
+   */
+  armSponsor() {
+    clearTimeout(this.sbTimer);
+    const p = this.player;
+    if (!this.settings.sponsor || !p.videoId || !p.playing) return;
+    if (this.sponsor?.id !== p.videoId) {
+      const id = p.videoId;
+      this.sponsor = { id, segs: null };
+      videoInfo(id).then((info) => {
+        if (this.sponsor?.id !== id) return;
+        this.sponsor.segs = info.sponsor;
+        this.armSponsor();
+      });
+      return;
+    }
+    const segs = this.sponsor.segs;
+    if (!segs) return;
+    const pos = this.position();
+    const seg = segs.find(([a, b]) => a > pos - 1 && b > pos + 0.5);
+    if (!seg) return;
+    const rev = p.rev;
+    this.sbTimer = setTimeout(() => {
+      if (!rooms.has(this.id) || this.player.rev !== rev) return;
+      this.setPlayer({ pos: seg[1] });
+      this.say(`Пропущена реклама ${mmss(seg[0])}–${mmss(seg[1])} (SponsorBlock)`);
+      this.sync();
+    }, Math.max(0, ((seg[0] - pos) / p.rate) * 1000));
   }
   say(text, from) {
     const msg = { id: uid(10), ts: now(), text, ...(from ? { uid: from.id, name: from.name, color: from.color } : { sys: true }) };
@@ -386,13 +442,6 @@ const handlers = {
     room.setPlayer({ rate });
     room.sync();
   },
-  react(room, m, d) {
-    // реакция всплывает над видео у всех; не храним, просто рассылаем
-    if (!REACTIONS.includes(d.r)) return;
-    if (now() - (m.lastReact ?? 0) < 300) return;
-    m.lastReact = now();
-    room.broadcast({ t: 'react', r: d.r, name: m.name, color: m.color });
-  },
   chat(room, m, d) {
     const text = clip(d.text, 500);
     if (!text) return;
@@ -413,6 +462,7 @@ const handlers = {
     if (room.role(m.cid) !== 'leader') return deny(m);
     if (typeof d.open === 'boolean') room.settings.open = d.open;
     if (typeof d.listed === 'boolean') room.settings.listed = d.listed;
+    if (typeof d.sponsor === 'boolean') room.settings.sponsor = d.sponsor;
     if (typeof d.title === 'string') room.settings.title = clip(d.title, 48);
     room.sync();
   },
@@ -462,6 +512,7 @@ const handlers = {
   },
 };
 
+const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const num = (v, def) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : def);
 const deny = (m) => m.room.send(m.ws, { t: 'error', text: 'Это может только ведущий или модератор' });
 
