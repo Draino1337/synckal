@@ -44,6 +44,8 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
   P.current = o && o.base === player.rev && Date.now() < o.until ? o.s : player;
   const sendRef = useRef(send);
   sendRef.current = send;
+  const adsRef = useRef<[number, number][]>([]); // рекламные вставки, если комната их пропускает
+  adsRef.current = sponsor ? (info?.sponsor ?? []) : [];
 
   const loaded = useRef<string | null>(null); // какое видео сейчас в плеере
   const cuedAt = useRef(0); // с какой секунды «заряжено» видео на паузе
@@ -228,7 +230,32 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
           setBlocked(true);
         }
       } else playSince.current = 0;
-      const diff = want - t; // > 0 — отстаём
+      // Рекламу, которую сервер пропустит (в неё не перематывали вручную — то же правило, что на сервере),
+      // перескакиваем сами, как только до неё дошли: не ждём перемотки от сервера и не заезжаем в неё.
+      // Расхождение считаем по времени «без рекламы», иначе плеер, уже перескочивший вставку,
+      // считался бы убежавшим вперёд и его вернули бы обратно в рекламу.
+      const ads = adsRef.current.filter(([a, b]) => a > s.pos - 1 && b > s.pos + 0.5);
+      const ad = st === S.PLAYING && ads.find(([a, b]) => t >= a && t < b - 0.5);
+      if (ad) {
+        p.seekTo(ad[1], true);
+        lastSeek.current = Date.now();
+        measureLead.current = false;
+        return;
+      }
+      const noAds = (x: number) => {
+        let cut = 0;
+        for (const [a, b] of ads) {
+          if (x >= b) cut += b - a;
+          else if (x > a) return a - cut;
+        }
+        return x - cut;
+      };
+      const withAds = (y: number) => {
+        let x = y;
+        for (const [a, b] of ads) if (x >= a) x += b - a;
+        return x;
+      };
+      const diff = noAds(want) - noAds(t); // > 0 — отстаём
       // первый кадр после перемотки показывает, хватило ли упреждения: поправляем его на будущее
       if (measureLead.current && st === S.PLAYING && Date.now() - lastSeek.current > 500) {
         measureLead.current = false;
@@ -236,7 +263,7 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
       }
       const gap = Date.now() - lastSeek.current;
       if (Math.abs(diff) > (hard ? DRIFT_HARD : DRIFT_SEEK) && (hard || gap > (st === S.BUFFERING ? 6000 : 2000))) {
-        p.seekTo(want + seekLead.current * s.rate, true);
+        p.seekTo(withAds(noAds(want) + seekLead.current * s.rate), true);
         lastSeek.current = Date.now();
         measureLead.current = true;
         nudging.current = false;
