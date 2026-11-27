@@ -36,12 +36,22 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
   const screen = useRef<HTMLDivElement>(null);
   const yt = useRef<YT.Player | null>(null);
   const [ready, setReady] = useState(false);
-  // своё действие (пауза, перемотка) применяем сразу, не дожидаясь сервера. Ответ сервера приходит
-  // с новым rev и заменяет догадку; не пришёл за 3 с — откатываемся к тому, что знаем
-  const optimistic = useRef<{ base: number; until: number; s: PlayerState } | null>(null);
-  const o = optimistic.current;
+  // Своё действие (пауза, перемотка) применяем сразу и держим, пока сервер не пришлёт новое состояние
+  // комнаты (новый rev). Ответа нет — не откатываемся, а повторяем действие: сообщение могло потеряться,
+  // пока связь обрывалась (раньше через 3 с без ответа плеер возвращался туда, откуда перематывали)
+  const optimistic = useRef<{ base: number; s: PlayerState; msg: Record<string, unknown>; sent: number; until: number } | null>(null);
+  const roomP = useRef(player);
+  roomP.current = player;
+  const canRef = useRef(canControl);
+  canRef.current = canControl;
+  /** по чему играем: своё действие, пока сервер его не подтвердил, иначе — состояние комнаты */
+  const pick = () => {
+    const o = optimistic.current;
+    if (o && (o.base !== roomP.current.rev || !canRef.current || Date.now() > o.until)) optimistic.current = null;
+    return optimistic.current?.s ?? roomP.current;
+  };
   const P = useRef(player);
-  P.current = o && o.base === player.rev && Date.now() < o.until ? o.s : player;
+  P.current = pick();
   const sendRef = useRef(send);
   sendRef.current = send;
   const adsRef = useRef<[number, number][]>([]); // рекламные вставки, если комната их пропускает
@@ -327,6 +337,15 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
   // тик: подстройка и обновление полосы времени
   useEffect(() => {
     const id = setInterval(() => {
+      P.current = pick();
+      // своё действие сервер не подтвердил за 2 с — повторяем, с позицией на сейчас. По base сервер
+      // применит повтор, только если комната с тех пор не менялась: дважды одно действие не сработает
+      const o = optimistic.current;
+      if (o && Date.now() - o.sent > 2000) {
+        o.sent = Date.now();
+        const now = serverNow();
+        sendRef.current({ ...o.msg, pos: expectedPos(o.s, now), at: now, base: o.base });
+      }
       sync();
       const p = yt.current;
       if (!p || !ready || !loaded.current) {
@@ -395,9 +414,11 @@ export function Player({ player, serverNow, canControl, send, skip, notify, info
     const s = P.current;
     const now = serverNow();
     const next = { ...s, pos: expectedPos(s, now), ...patch, at: now };
-    optimistic.current = { base: player.rev, until: Date.now() + 3000, s: next };
+    const m = { ...msg, at: now }; // когда нажали: сервер сдвинет позицию на время, пока сообщение шло
+    // через 45 с без ответа сдаёмся: молча умершее соединение к этому времени уже заменилось бы новым (до 20 с)
+    optimistic.current = { base: player.rev, s: next, msg: m, sent: Date.now(), until: Date.now() + 45_000 };
     P.current = next;
-    send(msg);
+    send(m);
     forceSeek.current = true;
     sync();
   };

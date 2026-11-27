@@ -423,7 +423,7 @@ const handlers = {
   play(room, m, d) {
     if (!room.canControl(m.cid)) return deny(m);
     if (!room.player.videoId) return;
-    room.setPlayer({ playing: true, pos: num(d.pos, room.position()) });
+    room.setPlayer({ playing: true, pos: num(d.pos, room.position()) + lag(d) * room.player.rate });
     room.sync();
   },
   pause(room, m, d) {
@@ -433,7 +433,7 @@ const handlers = {
   },
   seek(room, m, d) {
     if (!room.canControl(m.cid)) return deny(m);
-    room.setPlayer({ pos: num(d.pos, 0) });
+    room.setPlayer({ pos: num(d.pos, 0) + (room.player.playing ? lag(d) * room.player.rate : 0) });
     room.sync();
   },
   rate(room, m, d) {
@@ -514,6 +514,10 @@ const handlers = {
 
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const num = (v, def) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : def);
+// Сколько секунд назад нажали (at — время нажатия по серверным часам, клиент знает их по пингам).
+// У нажавшего видео всё это время уже играло дальше: без поправки комната отстала бы от него на задержку
+// сети, и после ответа сервера его плеер отскакивал бы назад. Не больше 5 с — на случай кривых часов
+const lag = (d) => (typeof d.at === 'number' && Number.isFinite(d.at) ? Math.min(5, Math.max(0, (now() - d.at) / 1000)) : 0);
 const deny = (m) => m.room.send(m.ws, { t: 'error', text: 'Это может только ведущий или модератор' });
 
 // ───────── HTTP ─────────
@@ -677,6 +681,9 @@ wss.on('connection', (ws) => {
       return;
     }
     if (!me) return;
+    // повтор действия плеера, на которое клиент не дождался ответа: применяем, только если комната с тех пор
+    // не менялась. Иначе первое сообщение уже дошло (потерялся ответ) или его перебило чужое действие
+    if (d.base !== undefined && d.base !== me.room.player.rev) return;
     const h = Object.hasOwn(handlers, d.t) ? handlers[d.t] : null;
     if (h) {
       try {

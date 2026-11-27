@@ -91,23 +91,41 @@ export function useRoom(roomId: string, name: string | null) {
       const sock = new WebSocket(`${proto}://${location.host}/ws`);
       ws.current = sock;
 
-      const ping = () => sock.readyState === WebSocket.OPEN && sock.send(JSON.stringify({ t: 'ping', c: Date.now() }));
+      let waitSince = 0; // когда ушёл пинг, после которого от сервера ещё ничего не пришло
+      const ping = () => {
+        if (sock.readyState !== WebSocket.OPEN) return;
+        sock.send(JSON.stringify({ t: 'ping', c: Date.now() }));
+        if (!waitSince) waitSince = Date.now();
+      };
+      // Соединение может умереть молча: сменилась сеть, переподключился VPN, компьютер поспал. Браузер ещё
+      // долго считает его открытым, а всё отправленное пропадает. Поэтому пингуем раз в 5 с, и если после
+      // пинга 10 с не пришло ничего — бросаем это соединение и сразу подключаемся заново
+      const watch = () => {
+        if (!waitSince || Date.now() - waitSince <= 10_000) return ping();
+        sock.onclose = sock.onmessage = null;
+        clearInterval(pinger);
+        setStatus('reconnecting');
+        connect();
+        // старое закрываем, когда новое уже вошло в комнату: если оно всё-таки было живо, остальные не увидят «вышел — зашёл»
+        setTimeout(() => sock.close(), 3000);
+      };
       sock.onopen = () => {
         retry = 0;
         bestRtt.current = Infinity;
         sock.send(JSON.stringify({ t: 'join', room: roomId, name: nameRef.current, cid: clientId() }));
-        // пачка пингов при входе, потом — редко: берём замер с самым коротким откликом
+        // пачка пингов при входе, потом — раз в 5 с: берём замер с самым коротким откликом
         for (let i = 0; i < 6; i++) setTimeout(ping, i * 150);
-        pinger = window.setInterval(ping, 15000);
+        pinger = window.setInterval(watch, 5000);
       };
       sock.onmessage = (ev) => {
+        waitSince = 0;
         const d = JSON.parse(ev.data);
         switch (d.t) {
           case 'pong': {
             const t = Date.now();
             const rtt = t - d.c;
-            // старые лучшие замеры понемногу «стареют», чтобы часы подстраивались под смену сети
-            bestRtt.current *= 1.1;
+            // старые лучшие замеры понемногу «стареют» (×1,1 за 15 с), чтобы часы подстраивались под смену сети
+            bestRtt.current *= 1.032;
             if (rtt <= bestRtt.current) {
               bestRtt.current = rtt;
               offset.current = d.s - (d.c + rtt / 2);
