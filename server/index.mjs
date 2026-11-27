@@ -13,6 +13,7 @@ const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist
 const ROOM_TTL = 10 * 60_000; // пустая комната живёт 10 минут
 const CHAT_KEEP = 150;
 const QUEUE_MAX = 300;
+const REACTIONS = ['<3', ':D', 'o_O', '!?', '+1', ':('];
 const COLORS = ['#b8a7f0', '#e0b64a', '#6fd8f2', '#3fb950', '#f27aa6', '#f2994a', '#9fe870', '#7aa2f7', '#e879f9', '#f24d5c'];
 
 /** @type {Map<string, Room>} */
@@ -385,6 +386,13 @@ const handlers = {
     room.setPlayer({ rate });
     room.sync();
   },
+  react(room, m, d) {
+    // реакция всплывает над видео у всех; не храним, просто рассылаем
+    if (!REACTIONS.includes(d.r)) return;
+    if (now() - (m.lastReact ?? 0) < 300) return;
+    m.lastReact = now();
+    room.broadcast({ t: 'react', r: d.r, name: m.name, color: m.color });
+  },
   chat(room, m, d) {
     const text = clip(d.text, 500);
     if (!text) return;
@@ -482,6 +490,32 @@ function json(res, code, body) {
   res.end(JSON.stringify(body));
 }
 
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const plural = (n, one, few, many) => {
+  const d = n % 10, h = n % 100;
+  return d === 1 && h !== 11 ? one : d >= 2 && d <= 4 && (h < 12 || h > 14) ? few : many;
+};
+
+/** Превью ссылки /r/<код> в мессенджерах: название комнаты, что играет, сколько внутри, обложка видео. */
+function roomPreview(html, id) {
+  const r = rooms.get(id);
+  const title = (r?.settings.title || `Комната ${id}`) + ' · synckal';
+  let desc = 'Заходи — смотрим YouTube вместе. Пауза и перемотка у всех сразу.';
+  if (r?.player.videoId) {
+    const n = new Set([...r.members.values()].map((m) => m.cid)).size;
+    desc = `Сейчас: «${r.player.title}»` + (n ? ` · ${n} ${plural(n, 'человек смотрит', 'человека смотрят', 'человек смотрят')}` : '') + '. Заходи!';
+  }
+  const tags = `<meta property="og:url" content="https://divan.watch/r/${id}" />` +
+    (r?.player.videoId
+      ? `<meta property="og:image" content="https://i.ytimg.com/vi/${r.player.videoId}/hqdefault.jpg" /><meta name="twitter:card" content="summary_large_image" />`
+      : '');
+  return html
+    .replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`)
+    .replace(/(<meta property="og:title" content=")[^"]*/, `$1${esc(title)}`)
+    .replace(/(<meta property="og:description" content=")[^"]*/, `$1${esc(desc)}`)
+    .replace('</head>', tags + '</head>');
+}
+
 const server = http.createServer((req, res) => {
   res.setHeader('x-content-type-options', 'nosniff');
   res.setHeader('strict-transport-security', 'max-age=31536000');
@@ -535,6 +569,8 @@ const server = http.createServer((req, res) => {
         return res.end('Фронтенд не собран: npm run build (или npm run dev для разработки)');
       }
       const ext = path.extname(file);
+      const rm = ext === '.html' && url.pathname.match(/^\/r\/([a-z0-9-]{3,32})\/?$/);
+      if (rm) data = roomPreview(data.toString(), rm[1]);
       res.writeHead(200, {
         'content-type': MIME[ext] ?? 'application/octet-stream',
         'cache-control': file.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
@@ -632,4 +668,10 @@ setInterval(() => {
   for (const [id, r] of rooms) if (r.members.size === 0 && r.emptySince && now() - r.emptySince > ROOM_TTL) rooms.delete(id);
 }, 30_000);
 
-server.listen(PORT, () => console.log(`synckal: http://localhost:${PORT}`));
+// бесплатный Render усыпляет сервис через 15 минут без входящих запросов, и первый заход потом грузится ~50 с.
+// Стучимся сами к себе через внешний адрес (он идёт через балансировщик Render и считается заходом)
+if (process.env.RENDER_EXTERNAL_URL) {
+  setInterval(() => fetch(process.env.RENDER_EXTERNAL_URL + '/api/rooms', { signal: AbortSignal.timeout(10_000) }).catch(() => {}), 10 * 60_000);
+}
+
+server.listen(PORT,() => console.log(`synckal: http://localhost:${PORT}`));

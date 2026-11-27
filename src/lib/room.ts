@@ -48,6 +48,16 @@ export interface ChatMsg {
   color?: string;
 }
 
+/** Реакция над видео: всплывает у всех и исчезает через пару секунд */
+export interface Reaction {
+  id: number;
+  r: string;
+  name: string;
+  color: string;
+  x: number; // 0..1 — где по ширине экрана всплывает
+}
+export const REACTIONS = ['<3', ':D', 'o_O', '!?', '+1', ':('];
+
 export type Status = 'connecting' | 'open' | 'reconnecting' | 'kicked' | 'disbanded';
 
 /** Позиция плеера сейчас — по серверным часам. */
@@ -65,6 +75,8 @@ export function useRoom(roomId: string, name: string | null) {
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [you, setYou] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; n: number } | null>(null);
+  const [reacts, setReacts] = useState<Reaction[]>([]);
+  const reactSeq = useRef(0);
   const ws = useRef<WebSocket | null>(null);
   const offset = useRef(0);
   const bestRtt = useRef(Infinity);
@@ -126,6 +138,12 @@ export function useRoom(roomId: string, name: string | null) {
           case 'chat':
             setChat((c) => (c.length > 200 ? [...c.slice(-150), d.msg] : [...c, d.msg]));
             break;
+          case 'react': {
+            const id = ++reactSeq.current;
+            setReacts((rs) => [...rs.slice(-24), { id, r: d.r, name: d.name, color: d.color, x: 0.08 + Math.random() * 0.84 }]);
+            setTimeout(() => setReacts((rs) => rs.filter((x) => x.id !== id)), 2600);
+            break;
+          }
           case 'error':
             notify(d.text);
             break;
@@ -162,5 +180,5 @@ export function useRoom(roomId: string, name: string | null) {
     if (name && status === 'open') send({ t: 'name', name });
   }, [name, status, send]);
 
-  return { status, room, chat, you, send, serverNow, toast, notify };
+  return { status, room, chat, you, send, serverNow, toast, notify, reacts };
 }

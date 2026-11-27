@@ -10,6 +10,7 @@ import { Users } from '../components/Users.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { useVideoInfo } from '../lib/videoInfo.ts';
 import { Votes } from '../components/Votes.tsx';
+import { ReactBar } from '../components/Reactions.tsx';
 
 function NameModal({ initial, onDone, onCancel }: { initial: string; onDone: (n: string) => void; onCancel?: () => void }) {
   const [name, setName] = useState(initial);
@@ -50,7 +51,7 @@ export function Room({ id }: { id: string }) {
   const [name, setName] = useState<string | null>(() => store.get('name'));
   const [renaming, setRenaming] = useState(false);
   const [copied, setCopied] = useState(false);
-  const { status, room, chat, you, send, serverNow, toast, notify } = useRoom(id, name);
+  const { status, room, chat, you, send, serverNow, toast, notify, reacts } = useRoom(id, name);
   const info = useVideoInfo(room?.player.videoId ?? null);
   const [toastOn, setToastOn] = useState(false);
   // чат и очередь — вкладки одной панели; пока открыта очередь, считаем непрочитанные сообщения
@@ -61,6 +62,14 @@ export function Room({ id }: { id: string }) {
     if (tab === 'chat') setSeen(said);
   }, [tab, said]);
   const unread = tab === 'queue' ? Math.max(0, said - seen) : 0;
+  // вкладка браузера в фоне: считаем сообщения, пришедшие после ухода, и показываем число в заголовке
+  const [awayAt, setAwayAt] = useState<number | null>(null);
+  useEffect(() => {
+    const on = () => setAwayAt(document.hidden ? serverNow() : null);
+    document.addEventListener('visibilitychange', on);
+    return () => document.removeEventListener('visibilitychange', on);
+  }, [serverNow]);
+  const missed = awayAt === null ? 0 : chat.filter((m) => !m.sys && m.ts > awayAt).length;
 
   useEffect(() => {
     if (!toast) return;
@@ -71,11 +80,11 @@ export function Room({ id }: { id: string }) {
 
   useEffect(() => {
     const t = room?.player.title;
-    document.title = (t ? `▶ ${t} · ` : '') + (room?.settings.title || `Комната ${id}`) + ' · synckal';
+    document.title = (missed ? `(${missed}) ` : '') + (t ? `▶ ${t} · ` : '') + (room?.settings.title || `Комната ${id}`) + ' · synckal';
     return () => {
       document.title = 'synckal — смотрим YouTube вместе';
     };
-  }, [room?.player.title, room?.settings.title, id]);
+  }, [room?.player.title, room?.settings.title, id, missed]);
 
   const saveName = (n: string) => {
     store.set('name', n);
@@ -151,7 +160,7 @@ export function Room({ id }: { id: string }) {
           <div className="room-play">
             <QueueAdd canControl={canControl} send={send} />
             <div className="room-stage">
-              <Player player={room.player} serverNow={serverNow} canControl={canControl} send={send} skip={room.skip} notify={notify} info={info} />
+              <Player player={room.player} serverNow={serverNow} canControl={canControl} send={send} skip={room.skip} notify={notify} info={info} reacts={reacts} />
               {status === 'reconnecting' && <span className="room-warn px px-raised">Связь потеряна, переподключаемся…</span>}
             </div>
             <div className="now">
@@ -162,7 +171,10 @@ export function Room({ id }: { id: string }) {
                   </h2>
                   <div className="now-meta">
                     {room.player.author && <small>{room.player.author}</small>}
-                    <Votes info={info} />
+                    <div className="now-acts">
+                      <Votes info={info} />
+                      <ReactBar send={send} />
+                    </div>
                   </div>
                 </>
               ) : (
